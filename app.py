@@ -9,65 +9,118 @@ from functools import wraps
 from datetime import datetime, timedelta
 import threading
 from dotenv import load_dotenv
-import sqlite3
+try:
+    import psycopg2
+    import psycopg2.extras
+    USE_PG = True
+except ImportError:
+    import sqlite3
+    USE_PG = False
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.memory import MemoryJobStore
 import pytz
 
 load_dotenv()  # load .env file automatically
 
-# ── SQLite credential store ───────────────────────────────────────────────────
-DB_PATH = os.path.join(os.path.dirname(__file__), "credentials.db")
+# ── Database credential store (PostgreSQL or SQLite fallback) ─────────────────
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+DB_PATH      = os.path.join(os.path.dirname(__file__), "credentials.db")
+
+def get_conn():
+    """Get database connection — PostgreSQL if available, else SQLite."""
+    if USE_PG and DATABASE_URL:
+        # Render provides DATABASE_URL starting with postgres:// — fix for psycopg2
+        url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        return psycopg2.connect(url)
+    else:
+        import sqlite3 as _sq
+        conn = _sq.connect(DB_PATH)
+        conn.row_factory = _sq.Row
+        return conn
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS customers (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT UNIQUE NOT NULL,
-            client_id   TEXT NOT NULL,
-            client_secret TEXT NOT NULL,
-            project_id  TEXT NOT NULL,
-            note        TEXT DEFAULT '',
-            created_at  TEXT DEFAULT (datetime('now','localtime'))
-        )
-    """)
+    conn = get_conn()
+    cur  = conn.cursor()
+    if USE_PG and DATABASE_URL:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS customers (
+                id          SERIAL PRIMARY KEY,
+                name        TEXT UNIQUE NOT NULL,
+                client_id   TEXT NOT NULL,
+                client_secret TEXT NOT NULL,
+                project_id  TEXT NOT NULL,
+                note        TEXT DEFAULT '',
+                created_at  TIMESTAMP DEFAULT NOW()
+            )
+        """)
+    else:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS customers (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT UNIQUE NOT NULL,
+                client_id   TEXT NOT NULL,
+                client_secret TEXT NOT NULL,
+                project_id  TEXT NOT NULL,
+                note        TEXT DEFAULT '',
+                created_at  TEXT DEFAULT (datetime('now','localtime'))
+            )
+        """)
     conn.commit()
     conn.close()
 
 init_db()
 
 def get_all_customers():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    rows = conn.execute("SELECT * FROM customers ORDER BY name").fetchall()
+    conn = get_conn()
+    cur  = conn.cursor()
+    cur.execute("SELECT id,name,client_id,client_secret,project_id,note,created_at FROM customers ORDER BY name")
+    cols = [d[0] for d in cur.description]
+    rows = [dict(zip(cols, row)) for row in cur.fetchall()]
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 def get_customer(name):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    row = conn.execute("SELECT * FROM customers WHERE LOWER(name)=LOWER(?)", (name,)).fetchone()
+    conn = get_conn()
+    cur  = conn.cursor()
+    cur.execute("SELECT id,name,client_id,client_secret,project_id,note,created_at FROM customers WHERE LOWER(name)=LOWER(%s)" if (USE_PG and DATABASE_URL) else
+                "SELECT id,name,client_id,client_secret,project_id,note,created_at FROM customers WHERE LOWER(name)=LOWER(?)", (name,))
+    cols = [d[0] for d in cur.description]
+    row  = cur.fetchone()
     conn.close()
-    return dict(row) if row else None
+    return dict(zip(cols, row)) if row else None
 
 def save_customer(name, client_id, client_secret, project_id, note=""):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        INSERT INTO customers (name, client_id, client_secret, project_id, note)
-        VALUES (?,?,?,?,?)
-        ON CONFLICT(name) DO UPDATE SET
-            client_id=excluded.client_id,
-            client_secret=excluded.client_secret,
-            project_id=excluded.project_id,
-            note=excluded.note
-    """, (name, client_id, client_secret, project_id, note))
+    conn = get_conn()
+    cur  = conn.cursor()
+    if USE_PG and DATABASE_URL:
+        cur.execute("""
+            INSERT INTO customers (name, client_id, client_secret, project_id, note)
+            VALUES (%s,%s,%s,%s,%s)
+            ON CONFLICT(name) DO UPDATE SET
+                client_id=EXCLUDED.client_id,
+                client_secret=EXCLUDED.client_secret,
+                project_id=EXCLUDED.project_id,
+                note=EXCLUDED.note
+        """, (name, client_id, client_secret, project_id, note))
+    else:
+        cur.execute("""
+            INSERT INTO customers (name, client_id, client_secret, project_id, note)
+            VALUES (?,?,?,?,?)
+            ON CONFLICT(name) DO UPDATE SET
+                client_id=excluded.client_id,
+                client_secret=excluded.client_secret,
+                project_id=excluded.project_id,
+                note=excluded.note
+        """, (name, client_id, client_secret, project_id, note))
     conn.commit()
     conn.close()
 
 def delete_customer(name):
-    conn = sqlite3.connect(DB_PATH)
-    affected = conn.execute("DELETE FROM customers WHERE LOWER(name)=LOWER(?)", (name,)).rowcount
+    conn = get_conn()
+    cur  = conn.cursor()
+    ph   = "%s" if (USE_PG and DATABASE_URL) else "?"
+    cur.execute(f"DELETE FROM customers WHERE LOWER(name)=LOWER({ph})", (name,))
+    affected = cur.rowcount
     conn.commit()
     conn.close()
     return affected > 0
