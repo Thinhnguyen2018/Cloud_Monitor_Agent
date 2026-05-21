@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GreenNode AI Assistant — Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:100vh;display:flex;overflow:hidden;background:#f0f2f5;color:#1a1a1a}
+
+/* ── Sidebar ─────────────────────────────────────── */
+#sidebar{width:256px;background:#fff;border-right:1px solid #e8e8e0;display:flex;flex-direction:column;flex-shrink:0}
+#sb-header{padding:14px 16px;background:#185fa5;flex-shrink:0}
+#sb-header h2{font-size:14px;font-weight:500;color:#fff;margin-bottom:2px}
+#sb-header p{font-size:11px;color:#afd0f0}
+#sb-list{flex:1;overflow-y:auto;padding:8px}
+#sb-footer{padding:10px;border-top:1px solid #e8e8e0;flex-shrink:0}
+#add-btn{width:100%;padding:8px;background:#185fa5;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit}
+#add-btn:hover{background:#0c447c}
+.cust-item{padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid transparent;display:flex;align-items:center;gap:8px}
+.cust-item:hover{background:#f0f4ff;border-color:#c5d8f0}
+.cust-item.active{background:#e6f1fb;border-color:#85b7eb}
+.cust-av{width:28px;height:28px;border-radius:50%;background:#185fa5;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0}
+.cust-info{flex:1;min-width:0}
+.cust-name{font-size:13px;font-weight:500;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cust-proj{font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cust-del{font-size:13px;color:#ccc;cursor:pointer;padding:2px 5px;border-radius:4px;flex-shrink:0}
+.cust-del:hover{color:#e53935;background:#ffebee}
+
+/* ── Main ────────────────────────────────────────── */
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#header{background:#fff;border-bottom:1px solid #e8e8e0;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+#header .htitle{font-size:15px;font-weight:500;color:#1a1a1a;flex:1}
+#header .hsub{font-size:12px;color:#888}
+#help-btn{background:none;border:1px solid #ddd;border-radius:8px;padding:5px 12px;font-size:12px;color:#666;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;flex-shrink:0}
+#help-btn:hover{background:#f5f5f0;border-color:#bbb}
+#conn-badge{font-size:11px;padding:2px 10px;border-radius:20px;background:#f0f0e8;color:#666;border:1px solid #ddd;flex-shrink:0}
+#conn-badge.ok{background:#e1f5ee;color:#0f6e56;border-color:#5dcaa5}
+
+/* ── Info panel ──────────────────────────────────── */
+#info-panel{flex:1;overflow-y:auto;display:flex;flex-direction:column;background:#fafaf8}
+.info-hero{padding:24px 28px 18px;border-bottom:1px solid #e8e8e0;background:#fff;flex-shrink:0}
+.info-logo-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.info-logo{width:42px;height:42px;background:#185fa5;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.info-title{font-size:17px;font-weight:500;color:#1a1a1a}
+.info-ver{font-size:12px;color:#888;margin-top:2px}
+.info-tags{display:flex;gap:6px;flex-wrap:wrap}
+.itag{font-size:11px;padding:2px 9px;border-radius:20px;font-weight:500}
+.itag.blue{background:#ddeeff;color:#185fa5}
+.itag.green{background:#e2efda;color:#1D7A4E}
+.itag.purple{background:#ede7f6;color:#6B4FBB}
+.itag.amber{background:#fff3cd;color:#8B6914}
+.info-body{padding:22px 28px;display:flex;flex-direction:column;gap:20px}
+.isec{background:#fff;border:1px solid #e8e8e0;border-radius:10px;padding:16px}
+.isec-title{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:#333;margin-bottom:12px}
+.isec-title svg{flex-shrink:0;color:#666}
+.steps{display:flex;flex-direction:column;gap:8px}
+.step{display:flex;align-items:flex-start;gap:10px}
+.step-n{width:22px;height:22px;border-radius:50%;background:#185fa5;color:#fff;font-size:11px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.step-t{font-size:13px;color:#333;line-height:1.5}
+.step-t b{font-weight:500;color:#185fa5}
+.cap-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cap-card{border:1px solid #e8e8e0;border-radius:10px;overflow:hidden}
+.cap-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;padding:8px 12px;border-bottom:1px solid #f0f0e8}
+.cap-hd.blue{background:#f0f6ff;color:#185fa5}
+.cap-hd.green{background:#f0faf5;color:#1D7A4E}
+.cap-hd.purple{background:#f5f0ff;color:#6B4FBB}
+.cap-hd.amber{background:#fffbf0;color:#8B6914}
+.cap-ul{list-style:none;padding:10px 12px;margin:0;display:flex;flex-direction:column;gap:5px}
+.cap-ul li{font-size:12px;color:#555;display:flex;align-items:flex-start;gap:5px;line-height:1.4}
+.cap-ul li::before{content:"·";color:#aaa;flex-shrink:0}
+.prompt-wrap{display:flex;flex-wrap:wrap;gap:7px}
+.pchip{font-size:12px;padding:5px 12px;border-radius:20px;border:1px solid #ddd;background:#fff;cursor:pointer;color:#444;transition:all .15s}
+.pchip:hover{background:#e6f1fb;border-color:#85b7eb;color:#185fa5}
+.info-cta{display:inline-flex;align-items:center;gap:7px;background:#185fa5;color:#fff;border:none;padding:9px 20px;border-radius:9px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;width:fit-content}
+.info-cta:hover{background:#0c447c}
+
+/* ── Chat ────────────────────────────────────────── */
+#chat-wrap{flex:1;display:none;flex-direction:column;min-height:0}
+#chat{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.msg{display:flex;gap:9px;align-items:flex-end}
+.msg.user{flex-direction:row-reverse;align-self:flex-end;max-width:76%}
+.msg.bot{align-self:flex-start;max-width:88%}
+.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.av.bot{background:#185fa5;color:#fff}
+.av.user{background:#ddd;color:#555}
+.bub{padding:9px 13px;border-radius:14px;font-size:13.5px;line-height:1.65;word-break:break-word}
+.bub.bot{background:#fff;border:1px solid #e8e8e0;border-bottom-left-radius:4px}
+.bub.user{background:#185fa5;color:#fff;border-bottom-right-radius:4px}
+.bub strong{font-weight:500}
+.bub code{background:#f0f0e8;border-radius:4px;padding:1px 5px;font-family:monospace;font-size:12px}
+.bub ul,.bub ol{margin:6px 0 6px 20px;padding:0}
+.bub li{margin:3px 0;line-height:1.5}
+.bub table{border-collapse:collapse;width:100%;font-size:12.5px;margin:6px 0}
+.bub table th{background:#f5f5f0;padding:5px 8px;text-align:left;border:1px solid #e0e0d8;font-weight:500}
+.bub table td{padding:5px 8px;border:1px solid #e8e8e0}
+.bub table tr:hover td{background:#fafaf8}
+.live-tag{font-size:10px;padding:1px 6px;border-radius:10px;background:#e6f1fb;color:#185fa5;margin-right:5px}
+.confirm-box{background:#fff;border:2px solid #f09595;border-radius:12px;padding:10px 14px;border-bottom-left-radius:4px}
+.confirm-title{font-size:13px;font-weight:500;color:#a32d2d;margin-bottom:6px}
+.confirm-body{font-size:13px;color:#1a1a1a;margin-bottom:10px;line-height:1.5}
+.tdot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#bbb;animation:bounce 1.2s infinite;margin:0 2px}
+.tdot:nth-child(2){animation-delay:.2s}
+.tdot:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+#sugs{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 8px;flex-shrink:0}
+.sug{font-size:12px;padding:4px 11px;border-radius:20px;border:1px solid #ddd;background:#fff;cursor:pointer;color:#555}
+.sug:hover{background:#e6f1fb;border-color:#85b7eb;color:#185fa5}
+#input-row{background:#fff;border-top:1px solid #e8e8e0;padding:10px 14px;display:flex;gap:8px;flex-shrink:0}
+#user-input{flex:1;padding:9px 13px;border-radius:22px;border:1px solid #ddd;font-size:13.5px;resize:none;height:42px;max-height:110px;font-family:inherit;line-height:1.4}
+#user-input:focus{outline:none;border-color:#378add}
+#send-btn{width:42px;height:42px;border-radius:50%;border:none;background:#185fa5;color:#fff;cursor:pointer;font-size:17px;flex-shrink:0}
+#send-btn:hover{background:#0c447c}
+#send-btn:disabled{background:#bbb;cursor:default}
+
+/* ── Modal ───────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:12px;padding:24px;width:420px;max-width:90vw}
+.modal h3{font-size:16px;font-weight:500;margin-bottom:16px}
+.modal input,.modal textarea{width:100%;font-size:13px;padding:8px 12px;border-radius:8px;border:1px solid #ddd;margin-bottom:10px;font-family:inherit}
+.modal input:focus,.modal textarea:focus{outline:none;border-color:#378add}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+.btn-cancel{font-size:13px;padding:7px 16px;border-radius:8px;border:1px solid #ddd;background:#f0f0e8;color:#555;cursor:pointer;font-family:inherit}
+.btn-save{font-size:13px;padding:7px 16px;border-radius:8px;border:none;background:#185fa5;color:#fff;cursor:pointer;font-family:inherit}
+.btn-save:hover{background:#0c447c}
+#modal-err{color:#e53935;font-size:12px;margin-bottom:8px;display:none}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <div id="sb-header">
+    <h2>🖥️ GreenNode Agent</h2>
+    <p>Quản lý đa khách hàng</p>
+  </div>
+  <div id="sb-list">
+  </div>
+  <div id="sb-footer">
+    <button id="add-btn">+ Thêm khách hàng</button>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="main">
+
+  <!-- Header -->
+  <div id="header">
+    <div style="flex:1;min-width:0">
+      <div class="htitle" id="hdr-title">GreenNode AI Assistant</div>
+      <div class="hsub" id="hdr-sub">Chọn khách hàng từ sidebar để bắt đầu</div>
+    </div>
+    <button id="help-btn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Hướng dẫn
+    </button>
+    <span id="conn-badge">⬤ chưa chọn</span>
+  </div>
+
+  <!-- Info / Guide panel -->
+  <div id="info-panel">
+    <div class="info-hero">
+      <div class="info-logo-row">
+        <div class="info-logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        </div>
+        <div>
+          <div class="info-title">GreenNode AI Assistant</div>
+          <div class="info-ver">Admin Portal · HCM-3 · Phase 2</div>
+        </div>
+      </div>
+      <div class="info-tags">
+        <span class="itag blue">⚡ Real-time API</span>
+        <span class="itag green">🤖 MaaS LLM</span>
+        <span class="itag purple">🔒 Multi-tenant</span>
+        <span class="itag amber">📅 Auto Scheduler</span>
+      </div>
+    </div>
+
+    <div class="info-body">
+
+      <!-- Getting started -->
+      <div class="isec">
+        <div class="isec-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.1 12.15 19.79 19.79 0 0 1 1.08 3.52 2 2 0 0 1 3.06 1.34h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9a16 16 0 0 0 5.91 5.91l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.07 16l-.15.92z"/></svg>
+          Bắt đầu nhanh
+        </div>
+        <div class="steps">
+          <div class="step"><div class="step-n">1</div><div class="step-t">Nhấn <b>+ Thêm khách hàng</b> ở sidebar trái</div></div>
+          <div class="step"><div class="step-n">2</div><div class="step-t">Điền tên KH, Client ID, Client Secret, Project ID → Lưu</div></div>
+          <div class="step"><div class="step-n">3</div><div class="step-t">Click tên KH trong sidebar → bắt đầu chat</div></div>
+          <div class="step"><div class="step-n">4</div><div class="step-t">Switch tự do giữa các KH — chat history lưu riêng từng người</div></div>
+        </div>
+      </div>
+
+      <!-- Capabilities -->
+      <div class="isec">
+        <div class="isec-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Tính năng
+        </div>
+        <div class="cap-grid">
+          <div class="cap-card">
+            <div class="cap-hd blue">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Quan sát
+            </div>
+            <ul class="cap-ul">
+              <li>Liệt kê VM / Volume / SG / Network / FIP</li>
+              <li>Health check — phát hiện SHUTOFF/ERROR</li>
+              <li>Orphan: volume chưa gắn, FIP idle</li>
+              <li>Security audit — rule mở 0.0.0.0/0</li>
+              <li>Topology VM → SG → VPC</li>
+              <li>Whoami — quyền service account</li>
+            </ul>
+          </div>
+          <div class="cap-card">
+            <div class="cap-hd green">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Actions
+            </div>
+            <ul class="cap-ul">
+              <li>Start / stop / reboot VM (có xác nhận)</li>
+              <li>Attach / detach Volume</li>
+              <li>Gắn / gỡ Security Group</li>
+              <li>Associate / disassociate Floating IP</li>
+              <li>Tạo snapshot VM</li>
+              <li>Đổi tên VM / Volume</li>
+            </ul>
+          </div>
+          <div class="cap-card">
+            <div class="cap-hd purple">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Lịch hẹn
+            </div>
+            <ul class="cap-ul">
+              <li>Hẹn giờ start VM lúc 6:00 sáng</li>
+              <li>Hẹn giờ stop VM lúc 22:00</li>
+              <li>Xem danh sách lịch đã đặt</li>
+              <li>Hủy lịch bất cứ lúc nào</li>
+            </ul>
+          </div>
+          <div class="cap-card">
+            <div class="cap-hd amber">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Multi-tenant
+            </div>
+            <ul class="cap-ul">
+              <li>Lưu credentials nhiều KH vĩnh viễn</li>
+              <li>Switch KH không cần nhập lại key</li>
+              <li>Chat history cách ly hoàn toàn</li>
+              <li>Giao diện end-user riêng: /customer</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Example prompts -->
+      <div class="isec">
+        <div class="isec-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Ví dụ câu hỏi
+        </div>
+        <div class="prompt-wrap">
+          <span class="pchip" data-q="Liệt kê tất cả VM và trạng thái hiện tại">Liệt kê tất cả VM</span>
+          <span class="pchip" data-q="Kiểm tra health toàn bộ server">Health check</span>
+          <span class="pchip" data-q="Phát hiện orphan resources">Phát hiện orphan</span>
+          <span class="pchip" data-q="Audit security group tìm rule nguy hiểm">Security audit</span>
+          <span class="pchip" data-q="Hiển thị topology hạ tầng">Topology</span>
+          <span class="pchip" data-q="Tóm tắt toàn bộ hạ tầng của tôi">Tóm tắt hạ tầng</span>
+          <span class="pchip" data-q="Xem lịch hẹn hiện tại">Xem lịch hẹn</span>
+          <span class="pchip" data-q="VM nào đang SHUTOFF?">VM đang tắt</span>
+        </div>
+      </div>
+
+      <button class="info-cta" id="cta-add">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Thêm khách hàng để bắt đầu
+      </button>
+
+    </div>
+  </div>
+
+  <!-- Chat area (hidden until customer selected) -->
+  <div id="chat-wrap">
+    <div id="chat"></div>
+    <div id="sugs" style="display:none">
+      <span class="sug" data-q="Liệt kê tất cả VM">🖥️ Liệt kê VM</span>
+      <span class="sug" data-q="Kiểm tra health toàn bộ server">❤️ Health check</span>
+      <span class="sug" data-q="Phát hiện orphan resources">⚠️ Orphan</span>
+      <span class="sug" data-q="Audit security group tìm rule nguy hiểm">🛡️ Security audit</span>
+      <span class="sug" data-q="Tóm tắt toàn bộ hạ tầng">📋 Tóm tắt</span>
+      <span class="sug" data-q="Xem lịch hẹn hiện tại">📅 Lịch hẹn</span>
+    </div>
+    <div id="input-row">
+      <textarea id="user-input" placeholder="Hỏi về hạ tầng của khách hàng..." disabled></textarea>
+      <button id="send-btn" disabled>➤</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Add customer modal -->
+<div class="overlay" id="modal" style="display:none">
+  <div class="modal">
+    <h3>➕ Thêm khách hàng</h3>
+    <input id="m-name"  type="text"     placeholder="Tên khách hàng (vd: Công ty ABC)"/>
+    <input id="m-cid"   type="text"     placeholder="Client ID" spellcheck="false" autocomplete="off"/>
+    <input id="m-csec"  type="password" placeholder="Client Secret" autocomplete="off"/>
+    <input id="m-proj"  type="text"     placeholder="Project ID (pro-xxxxx)" spellcheck="false"/>
+    <textarea id="m-note" rows="2"      placeholder="Ghi chú (tuỳ chọn)"></textarea>
+    <div id="modal-err"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" id="modal-cancel">Hủy</button>
+      <button class="btn-save"   id="modal-save">💾 Lưu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let customers       = [];
+let currentCustomer = null;
+let pendingAction   = null;
+const chatHistories = {};
+const chatMessages  = {};
+
+// ── Customers ─────────────────────────────────────────────────────────────────
+async function loadCustomers() {
+  try {
+    const r = await fetch(API + '/api/customers');
+    const d = await r.json();
+    customers = d.customers || [];
+  } catch(e) { customers = []; }
+  renderSidebar();
+}
+
+function renderSidebar() {
+  const list = document.getElementById('sb-list');
+  if (!customers.length) {
+    list.innerHTML = '<div style="text-align:center;padding:2rem 1rem;color:#aaa;font-size:13px;line-height:1.6">Chưa có khách hàng.<br>Nhấn nút bên dưới để thêm.</div>';
+    return;
+  }
+  list.innerHTML = customers.map(c => `
+    <div class="cust-item${currentCustomer?.name===c.name?' active':''}" data-name="${esc(c.name)}">
+      <div class="cust-av">${c.name.charAt(0).toUpperCase()}</div>
+      <div class="cust-info">
+        <div class="cust-name">${esc(c.name)}</div>
+        <div class="cust-proj">${esc(c.project_id)}</div>
+      </div>
+      <span class="cust-del" data-del="${esc(c.name)}" title="Xóa">✕</span>
+    </div>`).join('');
+
+  list.querySelectorAll('.cust-item').forEach(el => {
+    el.addEventListener('click', e => {
+      if (e.target.classList.contains('cust-del')) return;
+      selectCustomer(el.dataset.name);
+    });
+  });
+  list.querySelectorAll('.cust-del').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); deleteCustomer(el.dataset.del); });
+  });
+}
+
+async function selectCustomer(name) {
+  if (currentCustomer) {
+    chatMessages[currentCustomer.name] = document.getElementById('chat').innerHTML;
+  }
+  currentCustomer = customers.find(c => c.name === name);
+  if (!currentCustomer) return;
+  if (!chatHistories[name]) chatHistories[name] = [];
+  pendingAction = null;
+  renderSidebar();
+
+  document.getElementById('hdr-title').textContent = 'GreenNode — ' + name;
+  document.getElementById('hdr-sub').textContent   = 'Project: ' + currentCustomer.project_id;
+  document.getElementById('conn-badge').textContent = '⬤ đã chọn';
+  document.getElementById('conn-badge').className   = 'ok';
+  document.getElementById('user-input').disabled    = false;
+  document.getElementById('send-btn').disabled      = false;
+  document.getElementById('sugs').style.display     = 'flex';
+
+  document.getElementById('info-panel').style.display  = 'none';
+  document.getElementById('chat-wrap').style.display   = 'flex';
+
+  const chat = document.getElementById('chat');
+  if (chatMessages[name]) {
+    chat.innerHTML = chatMessages[name];
+  } else {
+    chat.innerHTML = '';
+    addBotHTML(`👋 Đang xem hạ tầng của <strong>${esc(name)}</strong>.<br>Dữ liệu lấy <strong>real-time</strong> mỗi khi bạn hỏi.`);
+  }
+  scrollChat();
+}
+
+async function deleteCustomer(name) {
+  if (!confirm(`Xóa khách hàng "${name}"?`)) return;
+  await fetch(API + `/api/customers/${name}`, {method: 'DELETE'});
+  if (currentCustomer?.name === name) showInfoPanel();
+  await loadCustomers();
+}
+
+// ── Info panel ────────────────────────────────────────────────────────────────
+function showInfoPanel() {
+  // Save current chat before leaving
+  if (currentCustomer) {
+    chatMessages[currentCustomer.name] = document.getElementById('chat').innerHTML;
+  }
+  currentCustomer = null;
+  pendingAction   = null;
+  document.getElementById('info-panel').style.display  = 'flex';
+  document.getElementById('info-panel').style.flexDirection = 'column';
+  document.getElementById('chat-wrap').style.display   = 'none';
+  document.getElementById('hdr-title').textContent     = 'GreenNode AI Assistant';
+  document.getElementById('hdr-sub').textContent       = 'Chọn khách hàng từ sidebar để bắt đầu';
+  document.getElementById('conn-badge').textContent    = '⬤ chưa chọn';
+  document.getElementById('conn-badge').className      = '';
+  document.getElementById('user-input').disabled       = true;
+  document.getElementById('send-btn').disabled         = true;
+  document.getElementById('sugs').style.display        = 'none';
+  renderSidebar();
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openModal() {
+  ['m-name','m-cid','m-csec','m-proj','m-note'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('modal-err').style.display = 'none';
+  document.getElementById('modal').style.display = 'flex';
+  document.getElementById('m-name').focus();
+}
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+
+async function saveCustomer() {
+  const name  = document.getElementById('m-name').value.trim();
+  const cid   = document.getElementById('m-cid').value.trim();
+  const csec  = document.getElementById('m-csec').value.trim();
+  const proj  = document.getElementById('m-proj').value.trim();
+  const note  = document.getElementById('m-note').value.trim();
+  const errEl = document.getElementById('modal-err');
+  const btn   = document.getElementById('modal-save');
+
+  if (!name || !cid || !csec || !proj) {
+    errEl.textContent = 'Vui lòng điền đầy đủ thông tin.';
+    errEl.style.display = 'block';
+    return;
+  }
+  btn.textContent = '⏳ Đang lưu...'; btn.disabled = true;
+  errEl.style.display = 'none';
+
+  try {
+    const r = await fetch(API + '/api/customers', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, clientId: cid, clientSecret: csec, projectId: proj, note})
+    });
+    const d = await r.json();
+    if (r.ok) {
+      closeModal();
+      await loadCustomers();
+      selectCustomer(name);
+    } else {
+      errEl.textContent = d.error || 'Lỗi không xác định.';
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    errEl.textContent = 'Không kết nối được server: ' + e.message;
+    errEl.style.display = 'block';
+  }
+  btn.textContent = '💾 Lưu'; btn.disabled = false;
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+async function send() {
+  if (!currentCustomer) return;
+  const activeCustomer = currentCustomer;
+  const inp  = document.getElementById('user-input');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = ''; inp.style.height = '42px';
+  addUser(text);
+
+  const confirmWords = ['có','xác nhận','confirm','yes','đồng ý','ok'];
+  const cancelWords  = ['không','hủy','cancel','no','thôi'];
+  const isConfirm = pendingAction && confirmWords.some(w => text.toLowerCase().includes(w));
+  const isCancel  = pendingAction && cancelWords.some(w => text.toLowerCase().trim() === w);
+
+  if (isCancel) {
+    pendingAction = null;
+    addBotHTML('✅ Đã hủy hành động.');
+    return;
+  }
+
+  if (!chatHistories[activeCustomer.name]) chatHistories[activeCustomer.name] = [];
+  chatHistories[activeCustomer.name].push({role: 'user', content: text});
+
+  const typ = addTyping();
+  document.getElementById('send-btn').disabled = true;
+
+  try {
+    const r = await fetch(API + '/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        customerName:  activeCustomer.name,
+        message:       text,
+        history:       (chatHistories[activeCustomer.name] || []).slice(-12),
+        confirmed:     isConfirm,
+        pendingAction: isConfirm ? pendingAction : null,
+      })
+    });
+    const d = await r.json();
+    if (typ.parentNode) typ.remove();
+
+    if (d.error) { addBotHTML('❌ ' + esc(d.error)); pendingAction = null; return; }
+
+    if (d.needConfirm && d.pendingAction) {
+      pendingAction = d.pendingAction;
+      addBotHTML(md2html(d.reply) + `
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button onclick="quickConfirm()" style="padding:6px 16px;border-radius:8px;border:none;background:#185fa5;color:#fff;cursor:pointer;font-size:13px;font-family:inherit">✅ Xác nhận</button>
+          <button onclick="quickCancel()"  style="padding:6px 16px;border-radius:8px;border:none;background:#f0f0e8;color:#555;cursor:pointer;font-size:13px;font-family:inherit">❌ Hủy</button>
+        </div>`);
+    } else {
+      if (d.actionDone) pendingAction = null;
+      addBotMD(d.reply, d.fetchedAt);
+      chatHistories[activeCustomer.name].push({role: 'assistant', content: d.reply});
+    }
+  } catch(e) {
+    if (typ.parentNode) typ.remove();
+    addBotHTML('❌ Lỗi: ' + esc(e.message));
+    pendingAction = null;
+  } finally {
+    document.getElementById('send-btn').disabled = false;
+  }
+}
+
+function quickConfirm() { document.getElementById('user-input').value = 'xác nhận'; send(); }
+function quickCancel()  { pendingAction = null; addBotHTML('✅ Đã hủy hành động.'); }
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function addUser(text) {
+  const d = document.createElement('div');
+  d.className = 'msg user';
+  d.innerHTML = `<div class="av user">👤</div><div class="bub user">${esc(text)}</div>`;
+  document.getElementById('chat').appendChild(d); scrollChat();
+}
+function addBotHTML(html) {
+  const d = document.createElement('div');
+  d.className = 'msg bot';
+  d.innerHTML = `<div class="av bot">🤖</div><div class="bub bot">${html}</div>`;
+  document.getElementById('chat').appendChild(d); scrollChat();
+  return d;
+}
+function addBotMD(text, ft) {
+  const live = ft ? '<span class="live-tag">⚡ real-time</span>' : '';
+  addBotHTML(live + md2html(text));
+}
+function addTyping() {
+  const d = document.createElement('div');
+  d.className = 'msg bot';
+  d.innerHTML = `<div class="av bot">🤖</div><div class="bub bot"><span class="tdot"></span><span class="tdot"></span><span class="tdot"></span></div>`;
+  document.getElementById('chat').appendChild(d); scrollChat();
+  return d;
+}
+function scrollChat() { const c = document.getElementById('chat'); c.scrollTop = c.scrollHeight; }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function md2html(text) {
+  let t = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  t = t.replace(/((?:^\|.+\|\s*\n?)+)/gm, block => {
+    const rows = block.trim().split('\n').filter(r => r.trim());
+    if (rows.length < 2) return block;
+    let html = '<table>';
+    rows.forEach((row, i) => {
+      if (/^\|[-:\|\s]+\|$/.test(row.trim())) return;
+      const cells = row.split('|').slice(1,-1).map(c => c.trim());
+      const tag = i === 0 ? 'th' : 'td';
+      html += '<tr>' + cells.map(c => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
+    });
+    return html + '</table>';
+  });
+  t = t
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
+    .replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
+    .replace(/\n{2,}/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+  return t;
+}
+
+function onKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  const t = e.target; t.style.height = '42px'; t.style.height = Math.min(t.scrollHeight, 110) + 'px';
+}
+
+// ── Event listeners ───────────────────────────────────────────────────────────
+document.getElementById('add-btn').addEventListener('click', openModal);
+document.getElementById('cta-add').addEventListener('click', openModal);
+document.getElementById('help-btn').addEventListener('click', showInfoPanel);
+document.getElementById('modal-cancel').addEventListener('click', closeModal);
+document.getElementById('modal-save').addEventListener('click', saveCustomer);
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+document.getElementById('send-btn').addEventListener('click', send);
+document.getElementById('user-input').addEventListener('keydown', onKey);
+
+document.querySelectorAll('.pchip').forEach(el => {
+  el.addEventListener('click', () => {
+    if (!customers.length) { openModal(); return; }
+    if (!currentCustomer) selectCustomer(customers[0].name);
+    setTimeout(() => { document.getElementById('user-input').value = el.dataset.q; send(); }, 200);
+  });
+});
+
+document.querySelectorAll('.sug').forEach(el => {
+  el.addEventListener('click', () => {
+    document.getElementById('user-input').value = el.dataset.q; send();
+  });
+});
+
+loadCustomers();
+</script>
+</body>
+</html>

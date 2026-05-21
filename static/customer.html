@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GreenNode AI Assistant</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;height:100vh;display:flex;flex-direction:column}
+#header{background:#fff;border-bottom:1px solid #e8e8e0;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo{width:32px;height:32px;background:#185fa5;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.logo svg{stroke:#fff}
+.htitle{font-size:15px;font-weight:500;color:#1a1a1a}
+.hsub{font-size:12px;color:#888}
+#badges{display:flex;gap:6px;margin-left:auto}
+.badge{font-size:11px;padding:2px 10px;border-radius:20px;background:#f0f0e8;color:#666;border:1px solid #ddd}
+.badge.ok{background:#e1f5ee;color:#0f6e56;border-color:#5dcaa5}
+.badge.live{background:#e6f1fb;color:#185fa5;border-color:#85b7eb}
+#setup{background:#fff;border-bottom:1px solid #e8e8e0;padding:8px 16px;display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap}
+#setup input{font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #ddd;color:#1a1a1a;flex:1;min-width:100px}
+.btn{font-size:13px;padding:6px 14px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#1a1a1a;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#f5f5f0}
+.btn.primary{background:#185fa5;color:#fff;border-color:#185fa5}
+.btn.primary:hover{background:#0c447c}
+.btn:disabled{opacity:0.4;cursor:default}
+#chat{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.msg{display:flex;gap:9px;align-items:flex-end}
+.msg.user{flex-direction:row-reverse;align-self:flex-end;max-width:75%}
+.msg.bot{align-self:flex-start;max-width:88%}
+.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.av.bot{background:#185fa5;color:#fff}
+.av.user{background:#ddd;color:#555}
+.bub{padding:9px 13px;border-radius:14px;font-size:13.5px;line-height:1.65;word-break:break-word}
+.bub.bot{background:#fff;border:1px solid #e8e8e0;border-bottom-left-radius:4px;color:#1a1a1a}
+.bub.user{background:#185fa5;color:#fff;border-bottom-right-radius:4px}
+.bub h3{font-size:14px;font-weight:500;margin:8px 0 4px}
+.bub p{margin:4px 0}
+.bub ul,.bub ol{margin:6px 0 6px 20px;padding:0}
+.bub li{margin:3px 0;line-height:1.5}
+.bub ul li{list-style-type:disc}
+.bub strong{font-weight:500}
+.bub table{border-collapse:collapse;width:100%;font-size:12.5px;margin:6px 0}
+.bub table th{background:#f5f5f0;padding:5px 8px;text-align:left;border:1px solid #e0e0d8;font-weight:500}
+.bub table td{padding:5px 8px;border:1px solid #e8e8e0}
+.bub table tr:hover td{background:#fafaf8}
+.bub code{background:#f0f0e8;border-radius:4px;padding:1px 5px;font-family:monospace;font-size:12px}
+.bub pre{background:#f5f5f0;border-radius:6px;padding:8px 10px;font-size:12px;overflow-x:auto;margin:6px 0;font-family:monospace;white-space:pre-wrap}
+.live-tag{font-size:10px;padding:1px 6px;border-radius:10px;background:#e6f1fb;color:#185fa5;margin-left:6px;vertical-align:middle}
+.confirm-box{background:#fff;border:2px solid #f09595;border-radius:12px;padding:10px 14px;border-bottom-left-radius:4px}
+.ctitle{font-size:13px;font-weight:500;color:#a32d2d;margin-bottom:6px}
+.cbody{font-size:13px;color:#1a1a1a;margin-bottom:10px;line-height:1.5}
+.confirm-actions{display:flex;gap:8px}
+.confirm-actions button{font-size:12px;padding:5px 14px;border-radius:8px;border:none;cursor:pointer}
+.confirm-yes{background:#185fa5;color:#fff}
+.confirm-yes:hover{background:#0c447c}
+.confirm-no{background:#f0f0e8;color:#555}
+.confirm-no:hover{background:#e0e0d8}
+.aok{background:#e1f5ee;border:1px solid #5dcaa5;border-radius:8px;padding:8px 12px;font-size:13px;color:#0f6e56;margin:2px 0}
+.aerr{background:#fcebeb;border:1px solid #f09595;border-radius:8px;padding:8px 12px;font-size:13px;color:#a32d2d;margin:2px 0}
+.tdot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#bbb;animation:bounce 1.2s infinite;margin:0 2px}
+.tdot:nth-child(2){animation-delay:.2s}
+.tdot:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+.sugs{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 8px;flex-shrink:0}
+.sug{font-size:12px;padding:4px 11px;border-radius:20px;border:1px solid #ddd;background:#fff;cursor:pointer;color:#555}
+.sug:hover{background:#e6f1fb;border-color:#85b7eb;color:#185fa5}
+#input-row{background:#fff;border-top:1px solid #e8e8e0;padding:10px 14px;display:flex;gap:8px;flex-shrink:0}
+#user-input{flex:1;padding:9px 13px;border-radius:22px;border:1px solid #ddd;font-size:13.5px;resize:none;height:42px;max-height:110px;font-family:inherit;line-height:1.4;color:#1a1a1a}
+#user-input:focus{outline:none;border-color:#378add}
+#send-btn{width:42px;height:42px;border-radius:50%;border:none;background:#185fa5;color:#fff;cursor:pointer;font-size:17px;flex-shrink:0}
+#send-btn:hover{background:#0c447c}
+#send-btn:disabled{background:#bbb;cursor:default}
+</style>
+</head>
+<body>
+<div id="header">
+  <div class="logo">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
+      <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+    </svg>
+  </div>
+  <div><div class="htitle">GreenNode AI Assistant</div><div class="hsub">HCM-3 · Real-time data</div></div>
+  <div id="badges">
+    <span class="badge" id="conn-badge">● chưa kết nối</span>
+    <span class="badge" id="live-badge">● offline</span>
+  </div>
+</div>
+
+<div id="setup">
+  <input id="cid"   type="text"     placeholder="Client ID"     spellcheck="false" autocomplete="off"/>
+  <input id="csec"  type="password" placeholder="Client Secret" autocomplete="off"/>
+  <input id="proj"  type="text"     placeholder="Project ID (pro-xxx...)" spellcheck="false" autocomplete="off"/>
+  <button class="btn primary" id="conn-btn" onclick="connect()">⚡ Kết nối</button>
+  <button class="btn" id="refresh-btn" onclick="connect()" style="display:none">🔄 Làm mới</button>
+</div>
+
+<div id="chat">
+  <div class="msg bot">
+    <div class="av bot">🤖</div>
+    <div class="bub bot">
+      Xin chào! Tôi là <strong>GreenNode AI Assistant</strong>.<br><br>
+      Nhập Client ID, Client Secret và Project ID rồi nhấn <strong>Kết nối</strong>.<br><br>
+      Mỗi khi bạn gửi tin nhắn, tôi sẽ lấy dữ liệu <strong>real-time</strong> từ GreenNode API — thông tin luôn chính xác và mới nhất.
+    </div>
+  </div>
+</div>
+
+<div class="sugs" id="sugs" style="display:none">
+  <span class="sug" onclick="ask('Tôi là ai? Tôi có những quyền gì?')">🪪 Whoami</span>
+  <span class="sug" onclick="ask('Liệt kê tất cả VM')">🖥️ Liệt kê VM</span>
+  <span class="sug" onclick="ask('Kiểm tra VM nào có trạng thái bất thường')">❤️ Health check</span>
+  <span class="sug" onclick="ask('Phát hiện orphan resources')">⚠️ Orphan</span>
+  <span class="sug" onclick="ask('Audit security group — tìm rule nguy hiểm')">🛡️ Security audit</span>
+  <span class="sug" onclick="ask('Hiển thị topology hạ tầng của tôi')">🗺️ Topology</span>
+  <span class="sug" onclick="ask('Tóm tắt toàn bộ hạ tầng')">📋 Tóm tắt</span>
+</div>
+
+<div id="input-row">
+  <textarea id="user-input" placeholder="Hỏi về hạ tầng... (Enter gửi, Shift+Enter xuống dòng)" onkeydown="onKey(event)" disabled></textarea>
+  <button id="send-btn" onclick="send()" disabled>➤</button>
+</div>
+
+<script>
+const API = "";  // empty = same origin (backend serves this file)
+let creds = null;
+let history = [];
+let pendingAction = null;
+
+async function connect() {
+  const cid  = document.getElementById('cid').value.trim();
+  const csec = document.getElementById('csec').value.trim();
+  const proj = document.getElementById('proj').value.trim();
+  if (!cid || !csec || !proj) { addBot('⚠️ Nhập đủ Client ID, Client Secret và Project ID.'); return; }
+  document.getElementById('conn-btn').disabled = true;
+  setBadge('conn', 'connecting');
+  try {
+    const r = await fetch(API + '/api/auth', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({clientId: cid, clientSecret: csec, projectId: proj})
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) { setBadge('conn','err'); addBot('❌ Lỗi: ' + (d.error||r.status)); return; }
+    creds = {clientId: cid, clientSecret: csec, projectId: proj};
+    setBadge('conn','ok');
+    setBadge('live','live');
+    document.getElementById('user-input').disabled = false;
+    document.getElementById('send-btn').disabled = false;
+    document.getElementById('sugs').style.display = 'flex';
+    document.getElementById('refresh-btn').style.display = 'inline-flex';
+    addBotHTML(`✅ <strong>Đã kết nối!</strong><br>
+Tài khoản: <strong>${d.username}</strong> (${d.email})<br>
+Project: <code>${d.projectId}</code><br><br>
+Dữ liệu được lấy <strong>real-time</strong> mỗi khi bạn hỏi — không cần tải trước. Hỏi tôi bất cứ điều gì về hạ tầng của bạn!`);
+    history = [];
+  } catch(e) {
+    setBadge('conn','err');
+    addBot('❌ Không kết nối được server: ' + e.message);
+  }
+  document.getElementById('conn-btn').disabled = false;
+}
+
+function setBadge(type, state) {
+  const b = document.getElementById(type + '-badge');
+  if (!b) return;
+  if (type === 'conn') {
+    if (state === 'ok')              { b.textContent='● đã kết nối'; b.className='badge ok'; }
+    else if (state === 'err')        { b.textContent='● lỗi kết nối'; b.className='badge'; }
+    else if (state === 'connecting') { b.textContent='● đang kết nối...'; b.className='badge'; }
+  } else if (type === 'live') {
+    if (state === 'live') { b.textContent='⚡ real-time'; b.className='badge live'; }
+  }
+}
+
+function ask(text) { document.getElementById('user-input').value = text; send(); }
+
+async function send() {
+  if (!creds) { addBot('⚠️ Vui lòng kết nối trước.'); return; }
+  const inp  = document.getElementById('user-input');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = ''; inp.style.height = '42px';
+  addUser(text);
+
+  // Check if this is a confirmation of a pending action
+  const confirmWords = ['có', 'xác nhận', 'confirm', 'yes', 'đồng ý', 'ok', 'tiếp tục'];
+  const cancelWords  = ['không', 'hủy', 'cancel', 'no', 'thôi'];
+  const isConfirm = pendingAction && confirmWords.some(w => text.toLowerCase().includes(w));
+  const isCancel  = pendingAction && cancelWords.some(w => text.toLowerCase().trim() === w);
+
+  if (isCancel) {
+    pendingAction = null;
+    addBotHTML('✅ Đã hủy hành động.');
+    return;
+  }
+
+  history.push({role:'user', content: text});
+  const typ = addTyping();
+  document.getElementById('send-btn').disabled = true;
+
+  try {
+    const payload = {
+      ...creds,
+      message:       text,
+      history:       history.slice(-12),
+      confirmed:     isConfirm,
+      pendingAction: isConfirm ? pendingAction : null,
+    };
+
+    const r = await fetch(API + '/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    typ.remove();
+    if (d.error) { addBotHTML('❌ ' + d.error); pendingAction = null; return; }
+
+    if (d.needConfirm && d.pendingAction) {
+      // Store pending action, show confirmation UI
+      pendingAction = d.pendingAction;
+      addBotHTML(md2html(d.reply) + `
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button onclick="quickConfirm()" style="padding:6px 16px;border-radius:8px;border:none;background:#185fa5;color:#fff;cursor:pointer;font-size:13px">✅ Xác nhận</button>
+          <button onclick="quickCancel()" style="padding:6px 16px;border-radius:8px;border:none;background:#f0f0e8;color:#555;cursor:pointer;font-size:13px">❌ Hủy</button>
+        </div>`);
+    } else {
+      if (d.actionDone) pendingAction = null;
+      addBotMD(d.reply, d.fetchedAt);
+      history.push({role:'assistant', content: d.reply});
+    }
+  } catch(e) {
+    typ.remove();
+    addBotHTML('❌ Lỗi: ' + e.message);
+    pendingAction = null;
+  }
+  document.getElementById('send-btn').disabled = false;
+}
+
+function quickConfirm() {
+  document.getElementById('user-input').value = 'xác nhận';
+  send();
+}
+function quickCancel() {
+  pendingAction = null;
+  addBotHTML('✅ Đã hủy hành động.');
+}
+
+// Markdown renderer
+function md2html(text) {
+  let t = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Tables
+  t = t.replace(/((?:^\|.+\|\s*\n?)+)/gm, tableBlock => {
+    const rows = tableBlock.trim().split('\n').filter(r => r.trim());
+    if (rows.length < 2) return tableBlock;
+    let html = '<table>';
+    rows.forEach((row, i) => {
+      if (/^\|[-:\|\s]+\|$/.test(row.trim())) return;
+      const cells = row.split('|').slice(1,-1).map(c => c.trim());
+      const tag = i === 0 ? 'th' : 'td';
+      html += '<tr>' + cells.map(c => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
+    });
+    html += '</table>';
+    return html;
+  });
+  t = t
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
+    .replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+    .replace(/\n{2,}/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+  return t;
+}
+
+
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function addUser(text) {
+  const d = document.createElement('div');
+  d.className = 'msg user';
+  d.innerHTML = `<div class="av user">👤</div><div class="bub user">${esc(text)}</div>`;
+  document.getElementById('chat').appendChild(d); scrollChat();
+}
+function addBot(text) {
+  const d = document.createElement('div');
+  d.className = 'msg bot';
+  d.innerHTML = `<div class="av bot">🤖</div><div class="bub bot">${esc(text).replace(/\n/g,'<br>')}</div>`;
+  document.getElementById('chat').appendChild(d); scrollChat();
+}
+function addBotHTML(html) {
+  const d = document.createElement('div');
+  d.className = 'msg bot';
+  d.innerHTML = `<div class="av bot">🤖</div><div class="bub bot">${html}</div>`;
+  document.getElementById('chat').appendChild(d); scrollChat();
+  return d;
+}
+function addBotMD(text, ft) {
+  const live = ft ? `<span class="live-tag">⚡ real-time</span>` : '';
+  addBotHTML(live + md2html(text));
+}
+function addTyping() {
+  const d = document.createElement('div');
+  d.className = 'msg bot';
+  d.innerHTML = `<div class="av bot">🤖</div><div class="bub bot"><span class="tdot"></span><span class="tdot"></span><span class="tdot"></span></div>`;
+  document.getElementById('chat').appendChild(d); scrollChat();
+  return d;
+}
+function scrollChat() { const c = document.getElementById('chat'); c.scrollTop = c.scrollHeight; }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function quickConfirm() { document.getElementById('user-input').value = 'xác nhận'; send(); }
+function quickCancel()  { pendingAction = null; addBotHTML('✅ Đã hủy hành động.'); document.getElementById('send-btn').disabled = false; }
+function onKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  const t = e.target; t.style.height = '42px'; t.style.height = Math.min(t.scrollHeight, 110) + 'px';
+}
+</script>
+</body>
+</html>
