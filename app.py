@@ -9,6 +9,7 @@ from functools import wraps
 from datetime import datetime, timedelta
 import threading
 from dotenv import load_dotenv
+from flask import session, redirect, url_for
 try:
     import psycopg2
     import psycopg2.extras
@@ -21,6 +22,11 @@ from apscheduler.jobstores.memory import MemoryJobStore
 import pytz
 
 load_dotenv()  # load .env file automatically
+
+# ── Admin auth config ─────────────────────────────────────────────────────────
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "greennode2025")
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-prod")
 
 # ── Database credential store (PostgreSQL or SQLite fallback) ─────────────────
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -214,6 +220,7 @@ def gn_api(token, user_id, method, path, body=None):
 
 # ── Customer credential CRUD ──────────────────────────────────────────────────
 @app.route("/api/customers", methods=["GET"])
+@admin_required
 def list_customers():
     customers = get_all_customers()
     # Don't expose secrets
@@ -228,6 +235,7 @@ def list_customers():
     return jsonify({"customers": safe, "count": len(safe)})
 
 @app.route("/api/customers", methods=["POST"])
+@admin_required
 def add_customer():
     body = request.get_json() or {}
     name          = body.get("name", "").strip()
@@ -246,6 +254,7 @@ def add_customer():
     return jsonify({"ok": True, "message": f"✅ Đã lưu credentials cho '{name}'"})
 
 @app.route("/api/customers/<name>", methods=["DELETE"])
+@admin_required
 def remove_customer(name):
     if delete_customer(name):
         return jsonify({"ok": True, "message": f"Đã xóa '{name}'"})
@@ -723,25 +732,16 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 server_name  = params.get("serverName", "")
                 run_at       = params.get("runAt", "")
                 try:
-                    import requests as req
-                    port = os.getenv("PORT", "8000")
-                    r = req.post(
-                        f"http://localhost:{port}/api/schedule",
-                        json={
-                            "clientId":     client_id,
-                            "clientSecret": client_secret,
-                            "projectId":    project_id,
-                            "action":       sched_action,
-                            "params":       {"serverId": server_id, "serverName": server_name},
-                            "runAt":        run_at,
-                        },
-                        timeout=10
+                    # Call schedule logic directly — no HTTP self-call
+                    result = _do_schedule(
+                        client_id, client_secret, project_id,
+                        sched_action,
+                        {"serverId": server_id, "serverName": server_name},
+                        run_at
                     )
-                    d = r.json()
-                    if r.status_code != 200:
-                        # Show error clearly — time in past, etc.
-                        return jsonify({"reply": f"❌ {d.get('error', 'Lỗi đặt lịch')}", "fetchedAt": now})
-                    return jsonify({"reply": d.get("message", "✅ Đã đặt lịch!"), "fetchedAt": now})
+                    if not result["ok"]:
+                        return jsonify({"reply": f"❌ {result.get('error', 'Lỗi đặt lịch')}", "fetchedAt": now})
+                    return jsonify({"reply": result.get("message", "✅ Đã đặt lịch!"), "fetchedAt": now})
                 except Exception as e:
                     return jsonify({"reply": f"❌ Lỗi đặt lịch: {e}", "fetchedAt": now})
 
@@ -1145,6 +1145,42 @@ def run_scheduled_job(job_id: str):
     finally:
         _scheduled_jobs.pop(job_id, None)
 
+
+def _do_schedule(client_id, client_secret, project_id, action, params, run_at_str, tz_str="Asia/Ho_Chi_Minh"):
+    """Internal schedule logic — callable without HTTP."""
+    try:
+        tz       = pytz.timezone(tz_str)
+        run_time = datetime.fromisoformat(run_at_str)
+        if run_time.tzinfo is None:
+            run_time = tz.localize(run_time)
+        now_tz = datetime.now(tz)
+        if run_time <= now_tz:
+            diff  = now_tz - run_time
+            hours = int(diff.total_seconds() // 3600)
+            mins  = int((diff.total_seconds() % 3600) // 60)
+            return {"ok": False, "error": f"Thời gian {run_time.strftime('%H:%M ngày %d/%m/%Y')} đã qua {hours}h{mins:02d}p rồi. Vui lòng chọn thời gian trong tương lai."}
+
+        job_id = f"{action}_{params.get('serverId','')[:8]}_{run_time.strftime('%Y%m%d%H%M')}"
+        _scheduled_jobs[job_id] = {
+            "desc":     f"{action} {params.get('serverName','')} lúc {run_time.strftime('%H:%M %d/%m/%Y')}",
+            "action":   action,
+            "params":   params,
+            "creds":    {"clientId": client_id, "clientSecret": client_secret, "projectId": project_id},
+            "run_time": run_time.isoformat(),
+        }
+        scheduler.add_job(
+            run_scheduled_job, trigger="date", run_date=run_time,
+            args=[job_id], id=job_id, replace_existing=True,
+        )
+        action_label = "khởi động" if action == "vm_start" else "tắt"
+        server_name  = params.get("serverName", "VM")
+        return {
+            "ok":      True,
+            "message": f"✅ Đã hẹn {action_label} VM **{server_name}** lúc {run_time.strftime('%H:%M ngày %d/%m/%Y')}",
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
 @app.route("/api/schedule", methods=["POST"])
 def schedule_action():
     """Schedule a VM action at a specific time."""
@@ -1353,8 +1389,91 @@ function save() {
 def customer_page():
     return send_from_directory("static", "customer.html")
 
+
+# ── Admin authentication ───────────────────────────────────────────────────────
+from functools import wraps
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("admin_logged_in"):
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route("/login", methods=["GET"])
+def login_page():
+    return """<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GreenNode Admin — Đăng nhập</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:#fff;border-radius:14px;padding:36px 32px;width:360px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+.logo{width:44px;height:44px;background:#185fa5;border-radius:10px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.logo svg{stroke:#fff}
+h2{text-align:center;font-size:18px;font-weight:500;color:#1a1a1a;margin-bottom:4px}
+p{text-align:center;font-size:13px;color:#888;margin-bottom:24px}
+label{font-size:13px;color:#555;display:block;margin-bottom:5px}
+input{width:100%;padding:9px 12px;border-radius:8px;border:1px solid #ddd;font-size:14px;margin-bottom:14px;font-family:inherit}
+input:focus{outline:none;border-color:#378add}
+button{width:100%;padding:10px;background:#185fa5;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit}
+button:hover{background:#0c447c}
+.err{color:#e53935;font-size:13px;text-align:center;margin-bottom:12px;display:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+  </div>
+  <h2>GreenNode Admin</h2>
+  <p>Đăng nhập để quản lý khách hàng</p>
+  <div class="err" id="err">Sai username hoặc password</div>
+  <form id="form">
+    <label>Username</label>
+    <input id="u" type="text" placeholder="admin" autocomplete="username"/>
+    <label>Password</label>
+    <input id="p" type="password" placeholder="••••••••" autocomplete="current-password"/>
+    <button type="submit">Đăng nhập</button>
+  </form>
+</div>
+<script>
+document.getElementById('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const r = await fetch('/api/login', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username: document.getElementById('u').value, password: document.getElementById('p').value})
+  });
+  const d = await r.json();
+  if (d.ok) window.location.href = '/';
+  else { document.getElementById('err').style.display = 'block'; }
+});
+document.getElementById('u').focus();
+</script>
+</body>
+</html>"""
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    body = request.get_json() or {}
+    if body.get("username") == ADMIN_USERNAME and body.get("password") == ADMIN_PASSWORD:
+        session["admin_logged_in"] = True
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "Invalid credentials"}), 401
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify({"ok": True})
+
 # ── Serve static chatbot UI ───────────────────────────────────────────────────
 @app.route("/")
+@admin_required
 def index():
     return send_from_directory("static", "index.html")
 
