@@ -26,7 +26,6 @@ load_dotenv()  # load .env file automatically
 # ── Admin auth config ─────────────────────────────────────────────────────────
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "greennode2025")
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-prod")
 
 # ── Database credential store (PostgreSQL or SQLite fallback) ─────────────────
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -132,6 +131,7 @@ def delete_customer(name):
     return affected > 0
 
 app = Flask(__name__, static_folder="static")
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-prod")
 CORS(app)
 
 # ── Scheduler setup ───────────────────────────────────────────────────────────
