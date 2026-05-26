@@ -604,12 +604,12 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
 
     # ── Rename ────────────────────────────────────────────────────────────────
     if any(w in msg for w in ["đổi tên", "rename", "doi ten"]):
-        import re as _re_rename
-        # Match: "thành X", "thanh X", "sang X", "to X", "là X"
-        m = _re_rename.search(r'(?:th[\xc3\xa0-\xc3\xa2\xc4\x83\xc3\xa2a]nh|thanh|sang|to|l[\xc3\xa0a]|la)\s+([\w\-\.]+)', msg)
+        import re as _rr
+        # Use original message (not lowercased) to preserve case of new name
+        m = _rr.search(r'(?:thanh|thành|sang|to)\s+([\w\-\.]+)', message, _rr.IGNORECASE)
         new_name = m.group(1) if m else None
         if not new_name:
-            words = [w for w in msg.split() if len(w) > 3]
+            words = [w for w in message.split() if len(w) > 3]
             new_name = words[-1] if words else None
         vm = find_vm(msg)
         if vm and new_name and new_name.lower() != vm.get("name","").lower():
@@ -822,6 +822,8 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 "fip_disassociate": f"Đã gỡ Floating IP khỏi VM **{params.get('serverName','?')}**",
                 "sg_attach":        f"Đã gắn Security Group vào VM **{params.get('serverName','?')}**",
                 "sg_detach":        f"Đã gỡ Security Group khỏi VM **{params.get('serverName','?')}**",
+                "vm_rename":        f"Đã đổi tên VM **{params.get('serverName','?')}** thành **{params.get('newName','?')}**",
+                "volume_rename":    f"Đã đổi tên Volume thành **{params.get('newName','?')}**",
             }
             if ok:
                 reply = f"✅ {labels.get(action_type, 'Thành công!')}"
@@ -889,7 +891,7 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
 
             # Extended actions (volume, FIP, SG, rename) → direct execute via action2
             # Actions requiring confirmation (medium risk)
-            CONFIRM_ACTIONS = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach"}
+            CONFIRM_ACTIONS = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach","vm_rename","volume_rename"}
             if action_type in CONFIRM_ACTIONS and params:
                 reply = f"⚠️ **Xác nhận hành động**\n\n{desc}\n\nBạn có chắc muốn thực hiện không? Nhấn nút bên dưới hoặc gõ **xác nhận**."
                 return jsonify({
