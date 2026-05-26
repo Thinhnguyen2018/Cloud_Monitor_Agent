@@ -563,7 +563,7 @@ async function send() {
 
     if (d.error) { addBotHTML('❌ ' + esc(d.error)); pendingAction = null; return; }
 
-    if (d.needConfirm && d.pendingAction) {
+    if (d.needConfirm && d.pendingAction && !isConfirm) {
       pendingAction = d.pendingAction;
       addBotHTML(md2html(d.reply) + `
         <div style="display:flex;gap:8px;margin-top:10px">

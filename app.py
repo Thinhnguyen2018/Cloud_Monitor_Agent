@@ -603,17 +603,20 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         return ("fip_disassociate", None, "Bạn muốn gỡ Floating IP khỏi VM nào?")
 
     # ── Rename ────────────────────────────────────────────────────────────────
-    if any(w in msg for w in ["đổi tên", "rename"]):
-        import re
-        m = re.search(r'(?:thanh|sang|to|ten)\s+([\w\-\.]+)', msg)
+    if any(w in msg for w in ["đổi tên", "rename", "doi ten"]):
+        import re as _re_rename
+        # Match: "thành X", "thanh X", "sang X", "to X", "là X"
+        m = _re_rename.search(r'(?:th[\xc3\xa0-\xc3\xa2\xc4\x83\xc3\xa2a]nh|thanh|sang|to|l[\xc3\xa0a]|la)\s+([\w\-\.]+)', msg)
         new_name = m.group(1) if m else None
+        if not new_name:
+            words = [w for w in msg.split() if len(w) > 3]
+            new_name = words[-1] if words else None
         vm = find_vm(msg)
-        if vm and new_name:
+        if vm and new_name and new_name.lower() != vm.get("name","").lower():
             return ("vm_rename",
                     {"serverId": vm.get("uuid"), "serverName": vm.get("name"), "newName": new_name},
                     f"Đổi tên VM **{vm.get('name')}** thành **{new_name}**")
         return ("vm_rename", None, "Bạn muốn đổi tên VM nào thành gì?")
-
     return (None, None, None)
 
 
@@ -640,6 +643,7 @@ def execute_vm_action(token, uid, project_id, action_type, params):
     # Return success immediately — GreenNode processes async in background
     return True, None, {"status": "PROCESSING", "message": "Lệnh đã được gửi, GreenNode đang xử lý"}
 
+@app.route("/api/chat", methods=["POST"])
 def chat():
     """
     Main chat endpoint.
