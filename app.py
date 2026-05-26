@@ -400,10 +400,25 @@ def detect_action_intent(message, vms, sgs):
     msg = message.lower()
 
     def find_vm(text):
+        text_lower = text.lower()
+        # Exact match first
         for vm in vms:
             name = (vm.get("name") or "").lower()
-            if name and name in text:
+            if name and name in text_lower:
                 return vm
+        # Partial/fuzzy match — check if any word in text matches part of VM name
+        for vm in vms:
+            name = (vm.get("name") or "").lower()
+            # Remove underscores and compare
+            name_clean = name.replace("_", "").replace("-", "")
+            text_clean = text_lower.replace("_", "").replace("-", "")
+            if name_clean and name_clean in text_clean:
+                return vm
+            # Check if significant part of name appears in text
+            parts = name.replace("_", " ").replace("-", " ").split()
+            if any(p in text_lower for p in parts if len(p) > 3):
+                return vm
+        # If only 1 VM, return it
         return vms[0] if len(vms) == 1 else None
 
     def find_sg(text):
@@ -516,15 +531,48 @@ def detect_action_intent(message, vms, sgs):
 
     # ── Volume attach/detach ─────────────────────────────────────────────────
     if any(w in msg for w in ["gắn volume", "attach volume", "gắn disk"]):
-        return ("volume_attach", None, "Gắn volume vào VM — cần tên VM và tên Volume")
+        vm = find_vm(msg)
+        # Find volume by name — look for known volumes in store (passed via vms context)
+        import re as _re
+        # Extract volume name: word after "volume" keyword
+        vol_match = _re.search(r'volume\s+([\w\-\.]+)', msg)
+        vol_name = vol_match.group(1) if vol_match else None
+        if vm and vol_name:
+            return ("volume_attach",
+                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
+                     "volumeId": vol_name, "volumeName": vol_name},
+                    f"Gắn volume **{vol_name}** vào VM **{vm.get('name')}**")
+        return ("volume_attach", None, f"Cần biết: tên VM{' ✓' if vm else ' ✗'} và tên Volume{' ✓' if vol_name else ' ✗'}")
     if any(w in msg for w in ["gỡ volume", "detach volume", "tháo disk", "gỡ disk"]):
-        return ("volume_detach", None, "Gỡ volume khỏi VM — cần tên VM và tên Volume")
+        vm = find_vm(msg)
+        import re as _re
+        vol_match = _re.search(r'volume\s+([\w\-\.]+)', msg)
+        vol_name = vol_match.group(1) if vol_match else None
+        if vm and vol_name:
+            return ("volume_detach",
+                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
+                     "volumeId": vol_name, "volumeName": vol_name},
+                    f"Gỡ volume **{vol_name}** khỏi VM **{vm.get('name')}**")
+        return ("volume_detach", None, f"Cần biết: tên VM{' ✓' if vm else ' ✗'} và tên Volume{' ✓' if vol_name else ' ✗'}")
 
     # ── Floating IP ───────────────────────────────────────────────────────────
     if any(w in msg for w in ["gắn floating", "associate ip", "gắn ip công cộng"]):
-        return ("fip_associate", None, "Gắn Floating IP vào VM")
+        vm = find_vm(msg)
+        import re as _re
+        ip_match = _re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', msg)
+        fip = ip_match.group(1) if ip_match else None
+        if vm and fip:
+            return ("fip_associate",
+                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"), "floatingIp": fip},
+                    f"Gắn Floating IP **{fip}** vào VM **{vm.get('name')}**")
+        return ("fip_associate", None, "Cần biết tên VM và địa chỉ Floating IP cần gắn")
     if any(w in msg for w in ["gỡ floating", "disassociate ip", "gỡ ip công cộng"]):
-        return ("fip_disassociate", None, "Gỡ Floating IP khỏi VM")
+        vm = find_vm(msg)
+        if vm:
+            return ("fip_disassociate",
+                    {"serverId": vm.get("uuid"), "serverName": vm.get("name")},
+                    f"Gỡ Floating IP khỏi VM **{vm.get('name')}**")
+        return ("fip_disassociate", None, "Bạn muốn gỡ Floating IP khỏi VM nào?")
 
     # ── Rename ────────────────────────────────────────────────────────────────
     if any(w in msg for w in ["đổi tên", "rename"]):
