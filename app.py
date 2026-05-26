@@ -793,6 +793,7 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
         # User confirmed → execute the action NOW
         action_type = pending_action.get("type")
         params      = pending_action.get("params", {})
+        print(f"[CONFIRM] type={action_type} params={params}")
         desc        = pending_action.get("desc", "")
         server_name = params.get("serverName", "VM")
 
@@ -811,7 +812,7 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
             return jsonify({"reply": reply, "fetchedAt": now, "actionDone": True})
 
         # Handle confirmed volume/FIP/SG actions
-        EXTENDED_CONFIRM = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach"}
+        EXTENDED_CONFIRM = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach","vm_rename","volume_rename","sg_rule_add","sg_rule_remove"}
         if action_type in EXTENDED_CONFIRM:
             ok, data = execute_extended_action(token, uid, project_id, action_type, params)
             labels = {
@@ -1503,7 +1504,7 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         server_id = params.get("serverId")
         new_name  = params.get("newName")
         s, d = gn_api(token, uid, "PUT",
-            f"v2/{P}/servers/{server_id}/rename", {"name": new_name})
+            f"v2/{P}/servers/{server_id}/rename", {"name": new_name, "newName": new_name})
         return s in OK, d
 
     # Rename Volume: PUT /v2/{projectId}/volumes/{volumeId}/rename
