@@ -1431,20 +1431,12 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         zone_id = params.get("zoneId", "HCM03-1B")
         body_attach = {"persistentVolume": True, "tags": [], "zoneId": zone_id}
         
-        # API uses full UUIDs with prefix (vol-xxx, ins-xxx)
-        s, d = gn_api(token, uid, "PUT",
-            f"v2/{P}/volumes/{volume_id}/servers/{server_id}/attach",
-            body_attach)
-        print(f"[ATTACH] PUT -> {s} {str(d)[:200]}")
-        if s in (200, 201, 202, 204):
-            return True, d
-        
-        # Try without ins- prefix on server
+        # GreenNode API: volume_id keeps vol- prefix, server_id strips ins- prefix
         clean_server = server_id.replace("ins-", "")
         s, d = gn_api(token, uid, "PUT",
             f"v2/{P}/volumes/{volume_id}/servers/{clean_server}/attach",
             body_attach)
-        print(f"[ATTACH] PUT (clean server) -> {s} {str(d)[:200]}")
+        print(f"[ATTACH] PUT -> {s} {str(d)[:200]}")
         return s in (200, 201, 202, 204), d
 
     if action_type == "volume_detach":
