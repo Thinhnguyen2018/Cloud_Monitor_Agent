@@ -1425,20 +1425,13 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         volume_id = params.get("volumeId")
         print(f"[ATTACH] server={server_id} volume={volume_id} uid={uid} project={P}")
         
-        endpoints = [
-            ("POST", f"v2/{P}/volumes/{volume_id}/servers/{server_id}/attach", {}),
-            ("POST", f"v2/{P}/volumes/{volume_id}/attach", {"serverId": server_id}),
-            ("POST", f"v2/{P}/servers/{server_id}/attachvolume", {"volumeId": volume_id}),
-            ("PUT",  f"v2/{P}/volumes/{volume_id}/attach", {"serverId": server_id}),
-            ("PUT",  f"v2/{P}/servers/{server_id}/attachvolume", {"volumeId": volume_id}),
-            ("POST", f"v2/{P}/volumes/{volume_id}/attachToServer", {"serverId": server_id}),
-        ]
-        for method, path, body in endpoints:
-            s, d = gn_api(token, uid, method, path, body)
-            print(f"[ATTACH] {method} {path} -> {s} {str(d)[:100]}")
-            if s in ok_statuses:
-                return True, d
-        return False, d
+        # Correct endpoint from GreenNode docs: PUT /v2/{project}/volumes/{vol}/servers/{server}/attach
+        body_attach = {"persistentVolume": True, "tags": [], "zoneId": ""}
+        s, d = gn_api(token, uid, "PUT",
+            f"v2/{P}/volumes/{volume_id}/servers/{server_id}/attach",
+            body_attach)
+        print(f"[ATTACH] PUT volumes/.../servers/.../attach -> {s} {str(d)[:200]}")
+        return s in ok_statuses, d
 
     if action_type == "volume_detach":
         server_id = params.get("serverId")
