@@ -1416,9 +1416,18 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     if action_type == "volume_attach":
         server_id = params.get("serverId")
         volume_id = params.get("volumeId")
+        print(f"[ATTACH] server={server_id} volume={volume_id} uid={uid} project={P}")
+        # Try both endpoint formats
         status, data = gn_api(token, uid, "POST",
-            f"v2/{P}/servers/{server_id}/attachvolume",
-            {"volumeId": volume_id})
+            f"v2/{P}/volumes/{volume_id}/attach",
+            {"serverId": server_id})
+        print(f"[ATTACH] format1 status={status} data={data}")
+        if status not in ok_statuses:
+            # Try alternate format
+            status, data = gn_api(token, uid, "POST",
+                f"v2/{P}/servers/{server_id}/attachvolume",
+                {"volumeId": volume_id})
+            print(f"[ATTACH] format2 status={status} data={data}")
         return status in ok_statuses, data
 
     if action_type == "volume_detach":
