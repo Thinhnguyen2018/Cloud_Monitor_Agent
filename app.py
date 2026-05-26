@@ -555,7 +555,7 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
                     return vol
         return None
 
-    if any(w in msg for w in ["gắn volume", "attach volume", "gắn disk"]):
+    if any(w in msg for w in ["gắn volume", "attach volume", "gắn disk", "muốn gắn", "gắn vào"]):
         vm = find_vm(msg)
         vol = find_volume(msg)
         if vm and vol:
@@ -571,7 +571,7 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         missing = f"tên VM{' ✓' if vm else ' ✗'} và tên Volume{' ✓' if vol else ' ✗'}"
         return ("volume_attach", None, f"Không tìm thấy: {missing}. Hỏi 'liệt kê volume' để xem danh sách.")
 
-    if any(w in msg for w in ["gỡ volume", "detach volume", "tháo disk", "gỡ disk"]):
+    if any(w in msg for w in ["gỡ volume", "detach volume", "tháo disk", "gỡ disk", "muốn gỡ", "gỡ khỏi"]):
         vm = find_vm(msg)
         vol = find_volume(msg)
         if vm and vol:
@@ -795,9 +795,19 @@ HƯỚNG DẪN TRẢ LỜI:
 - Dùng Markdown: **bold**, table, bullet list
 - Trạng thái VM: 🟢 ACTIVE · 🔴 SHUTOFF · 🟡 BUILD · ⚪ khác
 - Phát hiện vấn đề: ⚠️ orphan resource, 🚨 security risk, ❌ lỗi
-- Khi user muốn thực hiện action (start/stop/reboot VM, gắn/gỡ SG, tạo snapshot):
-  Mô tả rõ action sẽ làm gì và hỏi "Bạn có muốn tiếp tục không?"
-  KHÔNG tự động thực hiện — chờ user xác nhận
+- Khi user muốn thực hiện action trên hạ tầng (bất kể cách diễn đạt), trả về JSON đặc biệt:
+  {{"__action__": "<loại action>", "params": {{...}}, "desc": "<mô tả>"}}
+  Các loại action:
+  - vm_start: {{"serverId": "...", "serverName": "..."}}
+  - vm_stop: {{"serverId": "...", "serverName": "..."}}
+  - vm_reboot: {{"serverId": "...", "serverName": "..."}}
+  - volume_attach: {{"serverId": "...", "serverName": "...", "volumeId": "...", "volumeName": "...", "zoneId": "..."}}
+  - volume_detach: {{"serverId": "...", "serverName": "...", "volumeId": "...", "volumeName": "..."}}
+  - fip_associate: {{"serverId": "...", "serverName": "...", "floatingIp": "..."}}
+  - fip_disassociate: {{"serverId": "...", "serverName": "..."}}
+  - vm_rename: {{"serverId": "...", "serverName": "...", "newName": "..."}}
+  QUAN TRỌNG: Chỉ trả về JSON thuần, không có text xung quanh khi detect action
+  Nếu thiếu thông tin (không biết VM nào, volume nào), hỏi lại user thay vì đoán
 
 QUAN TRỌNG — ĐỘ TRỄ TRẠNG THÁI:
 GreenNode API nhận lệnh ngay lập tức nhưng việc thực thi thực tế cần 30-120 giây.
@@ -984,6 +994,31 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
         r.raise_for_status()
         data  = r.json()
         reply = data["choices"][0]["message"]["content"]
+        
+        # Check if LLM returned structured action JSON
+        import json as _json, re as _re
+        action_data = None
+        try:
+            d = _json.loads(reply.strip())
+            if "__action__" in d:
+                action_data = d
+        except:
+            m = _re.search(r'\{[^{}]*"__action__"[^{}]*\}', reply)
+            if m:
+                try: action_data = _json.loads(m.group())
+                except: pass
+        
+        if action_data:
+            action_type = action_data.get("__action__")
+            params      = action_data.get("params", {})
+            desc        = action_data.get("desc", f"Thực hiện {action_type}")
+            confirm_reply = f"⚠️ **Xác nhận hành động**\n\n{desc}\n\nBạn có chắc muốn thực hiện không? Nhấn nút bên dưới hoặc gõ **xác nhận**."
+            return jsonify({
+                "reply": confirm_reply, "fetchedAt": now,
+                "needConfirm": True,
+                "pendingAction": {"type": action_type, "params": params, "desc": desc}
+            })
+        
         return jsonify({"reply": reply, "fetchedAt": now, "model": GN_MAAS_MODEL})
     except Exception as e:
         return jsonify({"error": f"LLM API error: {e}"}), 500
