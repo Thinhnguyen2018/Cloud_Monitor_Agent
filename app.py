@@ -1426,6 +1426,7 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         print(f"[ATTACH] server={server_id} volume={volume_id} uid={uid} project={P}")
         
         endpoints = [
+            ("POST", f"v2/{P}/volumes/{volume_id}/servers/{server_id}/attach", {}),
             ("POST", f"v2/{P}/volumes/{volume_id}/attach", {"serverId": server_id}),
             ("POST", f"v2/{P}/servers/{server_id}/attachvolume", {"volumeId": volume_id}),
             ("PUT",  f"v2/{P}/volumes/{volume_id}/attach", {"serverId": server_id}),
