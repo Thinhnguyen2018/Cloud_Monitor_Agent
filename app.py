@@ -561,9 +561,10 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         if vm and vol:
             vol_id   = vol.get("uuid") or vol.get("id") or vol.get("volumeId")
             vol_name = vol.get("name") or vol.get("volumeName")
+            zone_id  = vol.get("zoneId") or vm.get("zoneId") or "HCM03-1B"
             return ("volume_attach",
                     {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
-                     "volumeId": vol_id, "volumeName": vol_name},
+                     "volumeId": vol_id, "volumeName": vol_name, "zoneId": zone_id},
                     f"Gắn volume **{vol_name}** (ID: `{str(vol_id)[:8]}...`) vào VM **{vm.get('name')}**")
         missing = f"tên VM{' ✓' if vm else ' ✗'} và tên Volume{' ✓' if vol else ' ✗'}"
         return ("volume_attach", None, f"Không tìm thấy: {missing}. Hỏi 'liệt kê volume' để xem danh sách.")
@@ -1426,25 +1427,25 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         print(f"[ATTACH] server={server_id} volume={volume_id} uid={uid} project={P}")
         
         # Correct endpoint from GreenNode docs: PUT /v2/{project}/volumes/{vol}/servers/{server}/attach
-        # Strip prefix if present (ins-xxx -> xxx, vol-xxx -> xxx)
-        clean_server = server_id.replace("ins-", "") if server_id.startswith("ins-") else server_id
-        clean_volume = volume_id.replace("vol-", "") if volume_id.startswith("vol-") else volume_id
-        body_attach = {"persistentVolume": True, "tags": [], "zoneId": "HCM03-1B"}
+        # Get zone from volume info
+        zone_id = params.get("zoneId", "HCM03-1B")
+        body_attach = {"persistentVolume": True, "tags": [], "zoneId": zone_id}
         
-        # Try with cleaned IDs first
-        s, d = gn_api(token, uid, "PUT",
-            f"v2/{P}/volumes/{clean_volume}/servers/{clean_server}/attach",
-            body_attach)
-        print(f"[ATTACH] PUT (clean) -> {s} {str(d)[:200]}")
-        if s in ok_statuses:
-            return True, d
-        
-        # Try with original IDs
+        # API uses full UUIDs with prefix (vol-xxx, ins-xxx)
         s, d = gn_api(token, uid, "PUT",
             f"v2/{P}/volumes/{volume_id}/servers/{server_id}/attach",
             body_attach)
-        print(f"[ATTACH] PUT (original) -> {s} {str(d)[:200]}")
-        return s in ok_statuses, d
+        print(f"[ATTACH] PUT -> {s} {str(d)[:200]}")
+        if s in (200, 201, 202, 204):
+            return True, d
+        
+        # Try without ins- prefix on server
+        clean_server = server_id.replace("ins-", "")
+        s, d = gn_api(token, uid, "PUT",
+            f"v2/{P}/volumes/{volume_id}/servers/{clean_server}/attach",
+            body_attach)
+        print(f"[ATTACH] PUT (clean server) -> {s} {str(d)[:200]}")
+        return s in (200, 201, 202, 204), d
 
     if action_type == "volume_detach":
         server_id = params.get("serverId")
