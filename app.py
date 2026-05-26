@@ -561,7 +561,9 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         if vm and vol:
             vol_id   = vol.get("uuid") or vol.get("id") or vol.get("volumeId")
             vol_name = vol.get("name") or vol.get("volumeName")
-            zone_id  = vol.get("zoneId") or vm.get("zoneId") or "HCM03-1B"
+            # zoneId must be the UUID from volumeType.zoneId, not the zone name
+            vol_type = vol.get("volumeType") or {}
+            zone_id  = vol_type.get("zoneId") or vol.get("zoneId") or "0745BE12-9433-4DD4-90A1-384631504EBE"
             return ("volume_attach",
                     {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
                      "volumeId": vol_id, "volumeName": vol_name, "zoneId": zone_id},
@@ -1428,7 +1430,7 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         
         # Correct endpoint from GreenNode docs: PUT /v2/{project}/volumes/{vol}/servers/{server}/attach
         # Get zone from volume info
-        zone_id = params.get("zoneId", "HCM03-1B")
+        zone_id = params.get("zoneId", "0745BE12-9433-4DD4-90A1-384631504EBE")
         body_attach = {"persistentVolume": True, "tags": [], "zoneId": zone_id}
         
         # GreenNode API: volume_id keeps vol- prefix, server_id strips ins- prefix
