@@ -132,6 +132,10 @@ def delete_customer(name):
 
 app = Flask(__name__, static_folder="static")
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-prod")
+
+# Fix for running behind proxy (nginx)
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 # Only use Secure cookies if running on HTTPS
 IS_HTTPS = os.getenv("HTTPS_ENABLED", "false").lower() == "true"
 app.config.update(
