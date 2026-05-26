@@ -995,14 +995,19 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
         data  = r.json()
         reply = data["choices"][0]["message"]["content"]
         
-        # Check if LLM returned structured action JSON
+        # Check if LLM returned structured action JSON (may be wrapped in ```json ... ```)
         import json as _json, re as _re
         action_data = None
+        reply_clean = reply.strip()
+        # Strip markdown code blocks
+        reply_clean = _re.sub(r'^```(?:json)?\s*', '', reply_clean)
+        reply_clean = _re.sub(r'\s*```$', '', reply_clean).strip()
         try:
-            d = _json.loads(reply.strip())
+            d = _json.loads(reply_clean)
             if "__action__" in d:
                 action_data = d
         except:
+            # Try finding JSON object anywhere in text
             m = _re.search(r'\{[^{}]*"__action__"[^{}]*\}', reply)
             if m:
                 try: action_data = _json.loads(m.group())
@@ -1012,6 +1017,27 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
             action_type = action_data.get("__action__")
             params      = action_data.get("params", {})
             desc        = action_data.get("desc", f"Thực hiện {action_type}")
+            
+            # For volume actions: lookup real UUID from name if needed
+            if action_type in ("volume_attach", "volume_detach"):
+                vol_id = params.get("volumeId", "")
+                if vol_id and not vol_id.startswith("vol-"):
+                    # LLM gave name, not UUID — lookup from volumes list
+                    for v in volumes:
+                        if v.get("name","").lower() == vol_id.lower():
+                            params["volumeId"] = v.get("uuid", vol_id)
+                            params["volumeName"] = v.get("name", vol_id)
+                            vol_type = v.get("volumeType") or {}
+                            params["zoneId"] = vol_type.get("zoneId") or "0745BE12-9433-4DD4-90A1-384631504EBE"
+                            break
+                # Lookup server UUID from name if needed
+                srv_id = params.get("serverId", "")
+                if srv_id and not srv_id.startswith("ins-"):
+                    for v in vms:
+                        if v.get("name","").lower() == params.get("serverName","").lower():
+                            params["serverId"] = v.get("uuid", srv_id)
+                            break
+
             confirm_reply = f"⚠️ **Xác nhận hành động**\n\n{desc}\n\nBạn có chắc muốn thực hiện không? Nhấn nút bên dưới hoặc gõ **xác nhận**."
             return jsonify({
                 "reply": confirm_reply, "fetchedAt": now,
