@@ -1426,11 +1426,24 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         print(f"[ATTACH] server={server_id} volume={volume_id} uid={uid} project={P}")
         
         # Correct endpoint from GreenNode docs: PUT /v2/{project}/volumes/{vol}/servers/{server}/attach
-        body_attach = {"persistentVolume": True, "tags": [], "zoneId": ""}
+        # Strip prefix if present (ins-xxx -> xxx, vol-xxx -> xxx)
+        clean_server = server_id.replace("ins-", "") if server_id.startswith("ins-") else server_id
+        clean_volume = volume_id.replace("vol-", "") if volume_id.startswith("vol-") else volume_id
+        body_attach = {"persistentVolume": True, "tags": [], "zoneId": "HCM03-1B"}
+        
+        # Try with cleaned IDs first
+        s, d = gn_api(token, uid, "PUT",
+            f"v2/{P}/volumes/{clean_volume}/servers/{clean_server}/attach",
+            body_attach)
+        print(f"[ATTACH] PUT (clean) -> {s} {str(d)[:200]}")
+        if s in ok_statuses:
+            return True, d
+        
+        # Try with original IDs
         s, d = gn_api(token, uid, "PUT",
             f"v2/{P}/volumes/{volume_id}/servers/{server_id}/attach",
             body_attach)
-        print(f"[ATTACH] PUT volumes/.../servers/.../attach -> {s} {str(d)[:200]}")
+        print(f"[ATTACH] PUT (original) -> {s} {str(d)[:200]}")
         return s in ok_statuses, d
 
     if action_type == "volume_detach":
