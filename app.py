@@ -814,6 +814,24 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 reply = f"❌ **Thất bại:** {err}\n\nVui lòng thử lại hoặc kiểm tra trên GreenNode portal."
             return jsonify({"reply": reply, "fetchedAt": now, "actionDone": True})
 
+        # Handle confirmed volume/FIP/SG actions
+        EXTENDED_CONFIRM = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach"}
+        if action_type in EXTENDED_CONFIRM:
+            ok, data = execute_extended_action(token, uid, project_id, action_type, params)
+            labels = {
+                "volume_attach":    f"Đã gắn volume **{params.get('volumeName','?')}** vào VM **{params.get('serverName','?')}**",
+                "volume_detach":    f"Đã gỡ volume **{params.get('volumeName','?')}** khỏi VM **{params.get('serverName','?')}**",
+                "fip_associate":    f"Đã gắn Floating IP **{params.get('floatingIp','?')}** vào VM **{params.get('serverName','?')}**",
+                "fip_disassociate": f"Đã gỡ Floating IP khỏi VM **{params.get('serverName','?')}**",
+                "sg_attach":        f"Đã gắn Security Group vào VM **{params.get('serverName','?')}**",
+                "sg_detach":        f"Đã gỡ Security Group khỏi VM **{params.get('serverName','?')}**",
+            }
+            if ok:
+                reply = f"✅ {labels.get(action_type, 'Thành công!')}"
+            else:
+                reply = f"❌ Thất bại: {data}"
+            return jsonify({"reply": reply, "fetchedAt": now, "actionDone": True})
+
     # Detect new action intent from this message
     if not confirmed:
         action_type, params, desc = detect_action_intent(user_message, vms, sgs)
@@ -873,7 +891,18 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 return jsonify({"reply": "⚠️ Không tìm thấy lịch hẹn nào để hủy.", "fetchedAt": now})
 
             # Extended actions (volume, FIP, SG, rename) → direct execute via action2
-            EXTENDED_ACTIONS = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_rule_add","sg_rule_remove","vm_rename","volume_rename"}
+            # Actions requiring confirmation (medium risk)
+            CONFIRM_ACTIONS = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach"}
+            if action_type in CONFIRM_ACTIONS and params:
+                reply = f"⚠️ **Xác nhận hành động**\n\n{desc}\n\nBạn có chắc muốn thực hiện không? Nhấn nút bên dưới hoặc gõ **xác nhận**."
+                return jsonify({
+                    "reply": reply, "fetchedAt": now,
+                    "needConfirm": True,
+                    "pendingAction": {"type": action_type, "params": params, "desc": desc}
+                })
+
+            # Actions executed directly (low risk: rename, tag)
+            EXTENDED_ACTIONS = {"sg_rule_add","sg_rule_remove","vm_rename","volume_rename"}
             if action_type in EXTENDED_ACTIONS and params:
                 ok, data = execute_extended_action(token, uid, project_id, action_type, params)
                 if ok:
