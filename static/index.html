@@ -546,6 +546,18 @@ async function send() {
         pendingAction: isConfirm ? pendingAction : null,
       })
     });
+    // Check content type before parsing JSON
+    const contentType = r.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      if (typ.parentNode) typ.remove();
+      if (r.status === 504 || r.status === 502) {
+        addBotHTML('⏳ GreenNode đang xử lý, xin bạn chờ trong giây lát...<br><small style="color:#888">Hỏi lại trạng thái sau 1-2 phút để kiểm tra kết quả.</small>');
+      } else {
+        addBotHTML('❌ Server error (status ' + r.status + '). Vui lòng thử lại.');
+      }
+      pendingAction = null;
+      return;
+    }
     const d = await r.json();
     if (typ.parentNode) typ.remove();
 
@@ -559,7 +571,7 @@ async function send() {
           <button onclick="quickCancel()"  style="padding:6px 16px;border-radius:8px;border:none;background:#f0f0e8;color:#555;cursor:pointer;font-size:13px;font-family:inherit">❌ Hủy</button>
         </div>`);
     } else {
-      if (d.actionDone) pendingAction = null;
+      pendingAction = null;  // Always clear after any non-confirm response
       addBotMD(d.reply, d.fetchedAt);
       chatHistories[activeCustomer.name].push({role: 'assistant', content: d.reply});
     }
