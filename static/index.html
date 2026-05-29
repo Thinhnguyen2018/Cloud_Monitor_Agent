@@ -438,8 +438,8 @@ async function deleteCustomer(name) {
   if (!confirm(`Xóa khách hàng "${name}"?`)) return;
   await apiFetch(API + `/api/customers/${name}`, {method: 'DELETE'});
   if (currentCustomer?.name === name) showInfoPanel();
-  await // Verify admin token on page load
-verifyStoredToken().then(() => loadCustomers());
+  await verifyStoredToken();
+  loadCustomers();
 }
 
 // ── Info panel ────────────────────────────────────────────────────────────────
