@@ -430,6 +430,15 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
                 return sg
         return None
 
+    # ── VM creation guide (no params yet — show options) ────────────────────
+    CREATE_KEYWORDS = ["tạo vm", "tạo server", "tạo máy chủ", "tạo máy ảo", "new vm", "create vm",
+                       "tạo mới vm", "tạo mới server", "tạo instance", "tạo 1 vm", "tạo một vm"]
+    if any(w in msg for w in CREATE_KEYWORDS):
+        # Extract VM name if mentioned
+        name_m = re.search(r'(?:tên|name)[:\s]+([^\s,;]+)', message, re.IGNORECASE)
+        vm_name = name_m.group(1) if name_m else None
+        return ("vm_create_guide", {"vmName": vm_name or ""}, "Hướng dẫn tạo VM mới")
+
     # ── List/cancel schedule ─────────────────────────────────────────────────
     if any(w in msg for w in ["xem lịch", "danh sách lịch", "lịch hẹn", "lịch đã đặt", "đang hẹn"]):
         return ("list_schedule", {}, "Danh sách lịch hẹn hiện tại")
@@ -643,8 +652,17 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
                     f"Thêm rule **{direction} {protocol} port {port}** vào Security Group **{sg.get('name')}**")
         return ("sg_rule_add", None, "Cần biết: tên Security Group và port cần mở")
 
-    if any(w in msg for w in ["xóa rule", "remove rule", "xoá rule", "delete rule"]):
-        return ("sg_rule_remove", None, "Cần biết: tên Security Group và Rule ID cần xóa")
+    if any(w in msg for w in ["xóa rule", "remove rule", "xoá rule", "delete rule", "đóng port", "close port"]):
+        sg = find_sg(msg)
+        rule_m = re.search(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', msg)
+        rule_id = rule_m.group(1) if rule_m else None
+        if sg and rule_id:
+            return ("sg_rule_remove",
+                    {"sgId": sg.get("uuid"), "sgName": sg.get("name"), "ruleId": rule_id},
+                    f"Xóa rule `{rule_id[:8]}…` khỏi SG **{sg.get('name')}**")
+        hint = (f"Gõ **xem rule {sg.get('name')}** để lấy Rule ID trước." if sg
+                else "Gõ **xem rule [tên SG]** để xem danh sách rules và lấy ID.")
+        return ("sg_rule_remove", None, hint)
 
     # ── Delete VM ─────────────────────────────────────────────────────────────
     if any(w in msg for w in ["xóa vm", "xoá vm", "delete vm", "xóa server", "xoá server"]):
@@ -664,7 +682,8 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
             return ("vm_resize",
                     {"serverId": vm.get("uuid"), "serverName": vm.get("name"), "flavorId": flavor_id},
                     f"Resize VM **{vm.get('name')}** sang flavor **{flavor_id}**")
-        return ("vm_resize", None, "Cần biết tên VM và flavor ID mới. Hỏi 'liệt kê flavor' để xem danh sách.")
+        hint = f"VM **{vm.get('name')}** hiện dùng flavor `{vm.get('flavor',{}).get('name','?')}`. " if vm else ""
+        return ("vm_resize", None, f"{hint}Hỏi **liệt kê flavor** để xem danh sách, sau đó gõ: **resize vm [tên] sang [flavor_id]**")
 
     # ── Delete Volume ─────────────────────────────────────────────────────────
     if any(w in msg for w in ["xóa volume", "xoá volume", "delete volume"]):
@@ -688,6 +707,53 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
                     {"serverId": vm.get("uuid"), "serverName": vm.get("name"), "snapshotName": snap_name},
                     f"Tạo snapshot VM **{vm.get('name')}** với tên **{snap_name}**")
         return ("vm_snapshot", None, "Bạn muốn tạo snapshot cho VM nào?")
+
+    # ── Rename Volume ─────────────────────────────────────────────────────────
+    if any(w in msg for w in ["đổi tên volume", "rename volume", "đổi tên vol"]):
+        vol = find_volume(msg)
+        m = re.search(r'(?:thanh|thành|sang|to)\s+([\w\-\.]+)', message, re.IGNORECASE)
+        new_name = m.group(1) if m else None
+        if vol and new_name:
+            vol_name = vol.get("name") or vol.get("volumeName")
+            return ("volume_rename",
+                    {"volumeId": vol.get("uuid"), "volumeName": vol_name, "newName": new_name},
+                    f"Đổi tên Volume **{vol_name}** thành **{new_name}**")
+        return ("volume_rename", None, "Cần biết tên Volume hiện tại và tên mới. VD: 'đổi tên volume data-vol thành backup-vol'")
+
+    # ── List SG rules ─────────────────────────────────────────────────────────
+    if any(w in msg for w in ["xem rule", "liệt kê rule", "danh sách rule", "show rule", "list rule", "rules của", "rule sg"]):
+        sg = find_sg(msg)
+        if sg:
+            return ("sg_list_rules", {"sgId": sg.get("uuid"), "sgName": sg.get("name")},
+                    f"Danh sách rules của SG **{sg.get('name')}**")
+        return ("sg_list_rules", None, "Bạn muốn xem rules của Security Group nào?")
+
+    # ── Audit log ─────────────────────────────────────────────────────────────
+    if any(w in msg for w in ["audit", "lịch sử thao tác", "activity log", "event log", "hoạt động của vm", "sự kiện vm", "lịch sử vm"]):
+        vm = find_vm(msg)
+        if vm:
+            return ("resource_audit", {"serverId": vm.get("uuid"), "serverName": vm.get("name")},
+                    f"Lịch sử hoạt động VM **{vm.get('name')}**")
+        return ("resource_audit", None, "Bạn muốn xem lịch sử của VM nào?")
+
+    # ── Tag resource ──────────────────────────────────────────────────────────
+    if any(w in msg for w in ["thêm tag", "gắn tag", "tag cho", "add tag", "đặt tag"]):
+        vm = find_vm(msg)
+        tag_m = re.search(r'tag[:\s]+([^\s,;]+)', msg)
+        tag_val = tag_m.group(1) if tag_m else None
+        if vm and tag_val:
+            return ("resource_tag",
+                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"), "tag": tag_val},
+                    f"Thêm tag **{tag_val}** cho VM **{vm.get('name')}**")
+        return ("resource_tag", None, "Cần biết tên VM và tag. VD: 'thêm tag env:prod cho vm-web'")
+
+    # ── Quota usage ───────────────────────────────────────────────────────────
+    if any(w in msg for w in ["quota", "hạn mức", "giới hạn tài nguyên", "quota usage", "còn quota", "dùng bao nhiêu quota"]):
+        return ("quota_usage", {}, "Xem hạn mức sử dụng tài nguyên")
+
+    # ── List flavors ──────────────────────────────────────────────────────────
+    if any(w in msg for w in ["liệt kê flavor", "xem flavor", "danh sách flavor", "flavor nào", "list flavor", "các flavor"]):
+        return ("list_flavors", {}, "Danh sách flavor khả dụng")
 
     return (None, None, None)
 
@@ -760,11 +826,17 @@ def chat():
         if s2 == 200: volumes = d2.get("listData", [])
         s3, d3 = gn_api(token, uid, "GET", f"v2/{P}/networks")
         if s3 == 200: networks = d3.get("listData", [])
-        # Fetch flavors and images for VM creation
-        sf, df = gn_api(token, uid, "GET", f"v2/{P}/flavors")
-        flavors = df.get("listData", []) if sf == 200 else []
-        si, di = gn_api(token, uid, "GET", f"v2/{P}/images")
-        images = di.get("listData", []) if si == 200 else []
+        # Fetch flavors, images, subnets, SSH keys, volume types for VM creation
+        sf, df   = gn_api(token, uid, "GET", f"v2/{P}/flavors")
+        flavors  = df.get("listData", []) if sf == 200 else []
+        si, di   = gn_api(token, uid, "GET", f"v2/{P}/images")
+        images   = di.get("listData", []) if si == 200 else []
+        ssu, dsu = gn_api(token, uid, "GET", f"v2/{P}/subnets")
+        subnets  = dsu.get("listData", []) if ssu == 200 else []
+        ssk, dsk = gn_api(token, uid, "GET", f"v2/{P}/sshkeys")
+        sshkeys  = dsk.get("listData", []) if ssk == 200 else []
+        svt, dvt = gn_api(token, uid, "GET", f"v2/{P}/volume-types")
+        vol_types = dvt.get("listData", []) if svt == 200 else []
 
         # SG from VMs
         sg_map = {}
@@ -808,6 +880,44 @@ def chat():
         for n in networks) or "(none)"
     fip_lines = "\n".join(f"FIP|{f['ip']}|{f['status']}|server:{f['server']}" for f in fips) or "(none)"
 
+    # ── Format creation resources for LLM context ────────────────────────────
+    def fmt_flavor(f):
+        fid  = f.get("id") or f.get("flavorId","?")
+        name = f.get("name","?")
+        cpu  = f.get("vcpus") or f.get("cpu","?")
+        ram  = f.get("ram","?")
+        disk = f.get("disk","?")
+        return f"FLAVOR|{fid}|{name}|{cpu}vCPU|{ram}MB|{disk}GB"
+
+    def fmt_image(i):
+        iid  = i.get("id") or i.get("imageId","?")
+        name = i.get("name","?")
+        itype = i.get("imageType") or i.get("osType","?")
+        return f"IMAGE|{iid}|{name}|{itype}"
+
+    def fmt_subnet(s):
+        sid   = s.get("id") or s.get("uuid","?")
+        name  = s.get("name","?")
+        netid = s.get("networkId") or s.get("networkUuid","?")
+        cidr  = s.get("cidr","?")
+        return f"SUBNET|{sid}|{name}|net:{netid}|cidr:{cidr}"
+
+    def fmt_sshkey(k):
+        kid  = k.get("id") or k.get("uuid","?")
+        name = k.get("name","?")
+        return f"SSHKEY|{kid}|{name}"
+
+    def fmt_voltype(v):
+        vid  = v.get("id") or v.get("uuid","?")
+        name = v.get("name","?")
+        return f"VOLTYPE|{vid}|{name}"
+
+    flavor_lines  = "\n".join(fmt_flavor(f) for f in flavors[:50])  or "(none)"
+    image_lines   = "\n".join(fmt_image(i)  for i in images[:30])   or "(none)"
+    subnet_lines  = "\n".join(fmt_subnet(s) for s in subnets)       or "(none)"
+    sshkey_lines  = "\n".join(fmt_sshkey(k) for k in sshkeys)       or "(none)"
+    voltype_lines = "\n".join(fmt_voltype(v) for v in vol_types)    or "(none)"
+
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     context = f"""=== REAL-TIME DATA (fetched: {now}) ===
 PROJECT: {project_id}
@@ -826,7 +936,22 @@ USER: {user_info.get('username','?')} | email: {user_info.get('rootEmail','?')} 
 {net_lines}
 
 --- Floating IP ({len(fips)}) ---
-{fip_lines}"""
+{fip_lines}
+
+--- Flavor ({len(flavors)}) [dùng cho tạo/resize VM] ---
+{flavor_lines}
+
+--- Image ({len(images)}) [dùng cho tạo VM] ---
+{image_lines}
+
+--- Subnet ({len(subnets)}) [dùng cho tạo VM] ---
+{subnet_lines}
+
+--- SSH Key ({len(sshkeys)}) [dùng cho tạo VM] ---
+{sshkey_lines}
+
+--- Volume Type ({len(vol_types)}) [dùng cho tạo VM/Volume] ---
+{voltype_lines}"""
 
     system_prompt = f"""Bạn là GreenNode AI Assistant — trợ lý quản lý hạ tầng đám mây thông minh cho GreenNode (VNG Cloud) HCM-3.
 Dữ liệu bên dưới được lấy REAL-TIME từ GreenNode API ngay lúc user gửi tin nhắn — luôn chính xác và mới nhất.
@@ -855,9 +980,13 @@ HƯỚNG DẪN TRẢ LỜI:
   - vm_delete: {{"serverId": "uuid", "serverName": "tên"}}
   - volume_create: {{"name": "tên", "size": 20, "volumeTypeId": "vtype-xxx"}}
   - volume_delete: {{"volumeId": "uuid", "volumeName": "tên"}}
-  - vm_create: {{"name": "tên", "flavorId": "flav-xxx", "imageId": "img-xxx", "networkId": "net-xxx", "subnetId": "sub-xxx", "rootDiskSize": 20, "rootDiskTypeId": "vtype-xxx"}}
-  ⚠️ QUAN TRỌNG: Chỉ trả về JSON thuần duy nhất, KHÔNG có text hay markdown xung quanh.
-  Nếu thiếu thông tin cần thiết, hỏi lại user thay vì đoán.
+  - vm_create: {{"name": "tên", "flavorId": "flav-xxx", "imageId": "img-xxx", "networkId": "net-xxx", "subnetId": "sub-xxx", "rootDiskSize": 20, "rootDiskTypeId": "vtype-xxx", "sshKeyId": "key-xxx hoặc null", "secgroupIds": [], "attachFloating": false, "flavorName": "tên flavor", "imageName": "tên image"}}
+  ⚠️ QUAN TRỌNG:
+  - Chỉ trả về JSON thuần duy nhất, KHÔNG có text hay markdown xung quanh.
+  - Dùng đúng ID từ dữ liệu context (FLAVOR|ID|..., IMAGE|ID|..., SUBNET|ID|..., SSHKEY|ID|..., VOLTYPE|ID|...)
+  - Với vm_create: thêm trường "flavorName" và "imageName" để hiển thị confirm rõ ràng
+  - Nếu thiếu thông tin quan trọng (tên VM, OS), hỏi lại user thay vì đoán
+  - Nếu user chỉ nói "tạo VM" mà không có chi tiết, hỏi: tên VM, OS muốn dùng, cấu hình (flavor)
 
 QUAN TRỌNG — ĐỘ TRỄ TRẠNG THÁI:
 GreenNode API nhận lệnh ngay lập tức nhưng việc thực thi thực tế cần 30-120 giây.
@@ -909,8 +1038,8 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 "vm_rename":        f"Đã đổi tên VM **{params.get('serverName','?')}** thành **{params.get('newName','?')}**",
                 "volume_rename":    f"Đã đổi tên Volume thành **{params.get('newName','?')}**",
                 "vm_snapshot":      f"Đã tạo snapshot VM **{params.get('serverName','?')}**",
-                "vm_create":        f"Đã tạo VM **{params.get('name','?')}**",
-                "vm_resize":        f"Đã resize VM **{params.get('serverName','?')}** sang flavor **{params.get('flavorName','?')}**",
+                "vm_create":        f"Đã gửi lệnh tạo VM **{params.get('name','?')}** ({params.get('flavorName','?')} · {params.get('imageName','?')}).\n\n⏳ GreenNode đang khởi tạo — thường mất 2-5 phút. Hỏi lại để kiểm tra trạng thái.",
+                "vm_resize":        f"Đã resize VM **{params.get('serverName','?')}** sang flavor **{params.get('flavorName','?')}**.\n\n⏳ GreenNode đang xử lý — chờ 1-2 phút.",
                 "vm_delete":        f"Đã xóa VM **{params.get('serverName','?')}**",
                 "volume_create":    f"Đã tạo Volume **{params.get('name','?')}**",
                 "volume_delete":    f"Đã xóa Volume **{params.get('volumeName','?')}**",
@@ -979,10 +1108,203 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                     return jsonify({"reply": f"✅ Đã hủy {len(cancelled)} lịch:\n" + "\n".join(f"• {c}" for c in cancelled), "fetchedAt": now})
                 return jsonify({"reply": "⚠️ Không tìm thấy lịch hẹn nào để hủy.", "fetchedAt": now})
 
+            # ── SG rules list ─────────────────────────────────────────────────
+            if action_type == "sg_list_rules":
+                sg_id   = params.get("sgId")
+                sg_name = params.get("sgName", "?")
+                s, d = gn_api(token, uid, "GET", f"v2/{P}/secgroups/{sg_id}")
+                if s == 200:
+                    rules = (d.get("secgroupRuleEntities")
+                             or d.get("rules")
+                             or d.get("data", {}).get("secgroupRuleEntities", [])
+                             or [])
+                    if not rules:
+                        return jsonify({"reply": f"📋 Security Group **{sg_name}** chưa có rule nào.", "fetchedAt": now})
+                    lines = ["| Rule ID (8 ký tự đầu) | Chiều | Proto | Port | CIDR |",
+                             "|---|---|---|---|---|"]
+                    for r in rules:
+                        rid    = r.get("id") or r.get("uuid") or "?"
+                        short  = str(rid)[:8]
+                        direct = r.get("direction", "?")
+                        proto  = r.get("protocol") or "all"
+                        pmin   = r.get("portRangeMin", "")
+                        pmax   = r.get("portRangeMax", "")
+                        port_s = f"{pmin}-{pmax}" if pmin and pmax and pmin != pmax else str(pmin) if pmin else "all"
+                        cidr   = r.get("remoteIpPrefix") or "0.0.0.0/0"
+                        lines.append(f"| `{short}` | {direct} | {proto} | {port_s} | {cidr} |")
+                    reply  = f"🛡️ **Rules của SG {sg_name}** ({len(rules)} rules):\n\n" + "\n".join(lines)
+                    reply += "\n\n💡 Để xóa rule: **xóa rule [UUID đầy đủ] sg [tên SG]**"
+                    return jsonify({"reply": reply, "fetchedAt": now})
+                return jsonify({"reply": f"❌ Không lấy được rules (status {s}).", "fetchedAt": now})
+
+            # ── Audit / activity log ──────────────────────────────────────────
+            if action_type == "resource_audit":
+                server_id   = params.get("serverId")
+                server_name = params.get("serverName", "?")
+                s, d = gn_api(token, uid, "GET", f"v2/{P}/servers/{server_id}/events")
+                if s != 200:
+                    s, d = gn_api(token, uid, "GET", f"v2/{P}/servers/{server_id}/actions")
+                if s == 200:
+                    events = (d.get("listData") or d.get("events") or d.get("actions") or [])[:20]
+                    if not events:
+                        return jsonify({"reply": f"📋 Chưa có sự kiện nào cho VM **{server_name}**.", "fetchedAt": now})
+                    lines = []
+                    for e in events:
+                        ts     = str(e.get("createdAt") or e.get("startTime") or e.get("timestamp", ""))[:19].replace("T", " ")
+                        action = e.get("action") or e.get("event") or e.get("type", "?")
+                        user   = e.get("userId") or e.get("user") or e.get("requestId", "system")
+                        result = str(e.get("result") or e.get("status", "")).upper()
+                        icon   = "✅" if result in ("SUCCESS","ACTIVE","DONE") else ("❌" if result in ("ERROR","FAILED") else "⏳")
+                        lines.append(f"• {icon} `{ts}` — **{action}** ({user})")
+                    reply = f"📋 **Lịch sử VM {server_name}** (20 sự kiện gần nhất):\n\n" + "\n".join(lines)
+                    return jsonify({"reply": reply, "fetchedAt": now})
+                return jsonify({"reply": f"⚠️ Không lấy được lịch sử (status {s}). API có thể chưa hỗ trợ trên HCM-3.", "fetchedAt": now})
+
+            # ── Quota usage ───────────────────────────────────────────────────
+            if action_type == "quota_usage":
+                s, d = gn_api(token, uid, "GET", f"v2/{P}/limits")
+                if s == 403:
+                    return jsonify({"reply": (
+                        "⚠️ **Không có quyền xem quota** (HTTP 403).\n\n"
+                        "Cần bổ sung IAM policy cho Service Account:\n"
+                        "- `vServerFullAccess` hoặc `vServerReadOnly`\n\n"
+                        "Liên hệ admin GreenNode để cấp quyền."
+                    ), "fetchedAt": now})
+                if s == 200:
+                    limits = d.get("limits") or d.get("listData") or d.get("data") or {}
+                    if isinstance(limits, list) and limits:
+                        lines = ["| Tài nguyên | Đang dùng | Giới hạn | % |", "|---|---|---|---|"]
+                        for x in limits:
+                            name  = x.get("resource") or x.get("name","?")
+                            used  = x.get("inUse") or x.get("used", 0)
+                            limit = x.get("limit") or x.get("maxAllowed", "∞")
+                            pct   = f"{int(used)/int(limit)*100:.0f}%" if str(limit).isdigit() and int(limit) > 0 else "—"
+                            lines.append(f"| {name} | {used} | {limit} | {pct} |")
+                        return jsonify({"reply": "📊 **Quota sử dụng:**\n\n" + "\n".join(lines), "fetchedAt": now})
+                    elif isinstance(limits, dict) and limits:
+                        lines = ["| Tài nguyên | Giá trị |", "|---|---|"]
+                        for k, v in limits.items():
+                            lines.append(f"| {k} | {v} |")
+                        return jsonify({"reply": "📊 **Quota sử dụng:**\n\n" + "\n".join(lines), "fetchedAt": now})
+                return jsonify({"reply": f"⚠️ Không lấy được quota (status {s}).", "fetchedAt": now})
+
+            # ── List flavors ──────────────────────────────────────────────────
+            if action_type == "list_flavors":
+                if not flavors:
+                    return jsonify({"reply": "⚠️ Không lấy được danh sách flavor.", "fetchedAt": now})
+                lines = ["| Flavor ID | Tên | vCPU | RAM | Disk |", "|---|---|---|---|---|"]
+                for f in sorted(flavors, key=lambda x: (x.get("vcpus", 0), x.get("ram", 0)))[:40]:
+                    fid   = f.get("id") or f.get("flavorId", "?")
+                    fname = f.get("name", "?")
+                    vcpu  = f.get("vcpus") or f.get("cpu", "?")
+                    ram   = f.get("ram", "?")
+                    disk  = f.get("disk", "?")
+                    lines.append(f"| `{fid}` | {fname} | {vcpu} vCPU | {ram} MB | {disk} GB |")
+                reply  = f"⚡ **Danh sách Flavor** ({len(flavors)} total):\n\n" + "\n".join(lines)
+                reply += "\n\n💡 Để resize VM: **resize vm [tên VM] sang [flavor_id]**"
+                return jsonify({"reply": reply, "fetchedAt": now})
+
+            # ── Tag resource (low-risk — no confirm) ─────────────────────────
+            if action_type == "resource_tag" and params:
+                ok, data = execute_extended_action(token, uid, project_id, action_type, params)
+                if ok:
+                    return jsonify({"reply": f"✅ Đã thêm tag **{params.get('tag','')}** cho VM **{params.get('serverName','')}**", "fetchedAt": now, "actionDone": True})
+                return jsonify({"reply": f"❌ Thêm tag thất bại: {data}", "fetchedAt": now})
+
+            # ── VM creation guided flow ───────────────────────────────────────
+            if action_type == "vm_create_guide":
+                pre_name = params.get("vmName", "")
+
+                # Flavors table (show top 15 sorted by vCPU then RAM)
+                fl_rows = sorted(flavors, key=lambda x: (x.get("vcpus",0), x.get("ram",0)))[:15]
+                fl_lines = "\n".join(
+                    f"| `{f.get('id','?')}` | {f.get('name','?')} | {f.get('vcpus','?')} vCPU | {f.get('ram','?')} MB |"
+                    for f in fl_rows)
+
+                # Images grouped by OS type (max 12)
+                img_rows = images[:12]
+                img_lines = "\n".join(
+                    f"| `{i.get('id','?')}` | {i.get('name','?')} | {i.get('imageType') or i.get('osType','?')} |"
+                    for i in img_rows)
+
+                # Networks + subnets
+                net_sub = []
+                for n in networks:
+                    nid   = n.get("uuid") or n.get("id","?")
+                    nname = n.get("name","?")
+                    subs  = [s for s in subnets if s.get("networkId") == nid or s.get("networkUuid") == nid]
+                    for s in subs:
+                        net_sub.append(f"| `{s.get('id') or s.get('uuid','?')}` | {s.get('name','?')} | {nname} | {s.get('cidr','?')} |")
+                    if not subs:
+                        net_sub.append(f"| _(no subnet)_ | — | {nname} | — |")
+                sub_lines = "\n".join(net_sub) or "| (không có subnet) |"
+
+                # SSH keys
+                key_lines = "\n".join(f"• `{k.get('id') or k.get('uuid','?')}` — {k.get('name','?')}" for k in sshkeys) or "_(chưa có SSH key nào)_"
+
+                # Default volume type
+                default_vt = vol_types[0] if vol_types else {}
+                vt_id   = default_vt.get("id") or default_vt.get("uuid","?")
+                vt_name = default_vt.get("name","SSD")
+
+                name_hint = f"Tên VM đề xuất: **{pre_name}**\n\n" if pre_name else ""
+                reply = f"""🖥️ **Tạo VM mới — Chọn thông số**
+
+{name_hint}Hãy cho tôi biết (hoặc nói tự nhiên, tôi sẽ tự điền):
+
+**1️⃣ Tên VM** — VD: `web-server-01`
+
+**2️⃣ Flavor (cấu hình)**
+| Flavor ID | Tên | vCPU | RAM |
+|---|---|---|---|
+{fl_lines}
+_(Hỏi **liệt kê flavor** để xem đầy đủ)_
+
+**3️⃣ Image (hệ điều hành)**
+| Image ID | Tên | OS |
+|---|---|---|
+{img_lines}
+
+**4️⃣ Subnet**
+| Subnet ID | Tên | Network | CIDR |
+|---|---|---|---|
+{sub_lines}
+
+**5️⃣ SSH Key** _(tuỳ chọn)_
+{key_lines}
+
+**6️⃣ Root disk** — Mặc định 40 GB, type: `{vt_name}` (`{vt_id}`)
+
+---
+💬 **Ví dụ:** _"Tạo VM tên web-02, Ubuntu 22.04, 4 vCPU 8GB RAM, subnet production, key deploy-key"_
+Tôi sẽ tự map tên → ID và xin xác nhận trước khi tạo."""
+                return jsonify({"reply": reply, "fetchedAt": now})
+
             # Extended actions (volume, FIP, SG, rename) → direct execute via action2
             # Actions requiring confirmation (medium risk)
             CONFIRM_ACTIONS = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach","vm_rename","volume_rename","vm_snapshot","vm_create","vm_resize","vm_delete","volume_create","volume_delete"}
             if action_type in CONFIRM_ACTIONS and params:
+                # vm_create: show full spec in confirm message
+                if action_type == "vm_create":
+                    ssh_name = next((k.get("name","?") for k in sshkeys if k.get("id") == params.get("sshKeyId") or k.get("uuid") == params.get("sshKeyId")), params.get("sshKeyId") or "_(không có)_")
+                    subnet_name = next((s.get("name","?") for s in subnets if s.get("id") == params.get("subnetId") or s.get("uuid") == params.get("subnetId")), params.get("subnetId","?"))
+                    spec = (
+                        f"🖥️ **Xác nhận tạo VM mới**\n\n"
+                        f"| Thông số | Giá trị |\n|---|---|\n"
+                        f"| Tên | **{params.get('name','?')}** |\n"
+                        f"| Flavor | {params.get('flavorName') or params.get('flavorId','?')} |\n"
+                        f"| OS / Image | {params.get('imageName') or params.get('imageId','?')} |\n"
+                        f"| Subnet | {subnet_name} |\n"
+                        f"| Root disk | {params.get('rootDiskSize',40)} GB |\n"
+                        f"| SSH Key | {ssh_name} |\n"
+                        f"| Floating IP | {'Có' if params.get('attachFloating') else 'Không'} |\n\n"
+                        f"⚠️ VM sẽ được tạo và **tính phí ngay lập tức**. Xác nhận?"
+                    )
+                    return jsonify({
+                        "reply": spec, "fetchedAt": now,
+                        "needConfirm": True,
+                        "pendingAction": {"type": action_type, "params": params, "desc": desc}
+                    })
                 reply = f"⚠️ **Xác nhận hành động**\n\n{desc}\n\nBạn có chắc muốn thực hiện không? Nhấn nút bên dưới hoặc gõ **xác nhận**."
                 return jsonify({
                     "reply": reply, "fetchedAt": now,
@@ -1519,6 +1841,23 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     if action_type == "volume_delete":
         volume_id = params.get("volumeId")
         s, d = gn_api(token, uid, "DELETE", f"v2/{P}/volumes/{volume_id}")
+        return s in OK, d
+
+    # ── Tag resource ──────────────────────────────────────────────────────────
+    # PUT /v2/{projectId}/servers/{serverId}/tags
+    # Body: {"tags": [{"key": "env", "value": "prod"}]}
+    if action_type == "resource_tag":
+        server_id = params.get("serverId")
+        tag_raw   = params.get("tag", "")          # format: "key:value" or "key=value" or plain
+        if ":" in tag_raw:
+            k, v = tag_raw.split(":", 1)
+        elif "=" in tag_raw:
+            k, v = tag_raw.split("=", 1)
+        else:
+            k, v = tag_raw, tag_raw
+        s, d = gn_api(token, uid, "PUT",
+            f"v2/{P}/servers/{server_id}/tags",
+            {"tags": [{"key": k.strip(), "value": v.strip()}]})
         return s in OK, d
 
     return False, {"error": f"Unknown action: {action_type}"}
