@@ -2160,31 +2160,31 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         network_id = params.get("networkId") or ""
         subnet_id  = params.get("subnetId")  or ""
 
-        # If networkId/subnetId missing, auto-fetch from account
+        # Always re-fetch subnets to get real IDs (may have been empty at chat time)
+        sn_s, sn_d = gn_api(token, uid, "GET", f"v2/{P}/subnets")
+        _subnets = sn_d.get("listData", []) if sn_s == 200 else []
+        print(f"[VM_CREATE] subnets API -> status={sn_s} count={len(_subnets)} sample={str(_subnets[:1])[:200]}")
+
+        if _subnets:
+            _sn = _subnets[0]
+            # Try all possible field names for subnet/network ID
+            subnet_id  = (subnet_id  or
+                          _sn.get("id") or _sn.get("uuid") or
+                          _sn.get("subnetId") or _sn.get("subnetUuid") or "")
+            network_id = (network_id or
+                          _sn.get("networkId") or _sn.get("networkUuid") or
+                          _sn.get("vpcId") or _sn.get("vpcUuid") or "")
+
         if not network_id or not subnet_id:
-            sn_s, sn_d = gn_api(token, uid, "GET", f"v2/{P}/subnets")
-            _subnets = sn_d.get("listData", []) if sn_s == 200 else []
-            if not _subnets:
-                # Try networks endpoint as fallback
-                nw_s, nw_d = gn_api(token, uid, "GET", f"v2/{P}/networks")
-                _networks = nw_d.get("listData", []) if nw_s == 200 else []
-                if _networks:
-                    network_id = _networks[0].get("uuid") or _networks[0].get("id", "")
-            else:
-                _sn = _subnets[0]
-                subnet_id  = subnet_id  or _sn.get("id") or _sn.get("uuid", "")
-                network_id = network_id or _sn.get("networkId") or _sn.get("networkUuid", "")
-            print(f"[VM_CREATE] auto-resolved networkId={network_id} subnetId={subnet_id}")
+            return False, {"message": f"Không lấy được network/subnet từ tài khoản (networkId={repr(network_id)}, subnetId={repr(subnet_id)}). Vui lòng kiểm tra credentials hoặc tạo VPC trước."}
 
-        if not network_id:
-            return False, {"message": "networkId: must not be blank — không lấy được network từ tài khoản. Vui lòng kiểm tra credentials."}
-
+        print(f"[VM_CREATE] final networkId={network_id} subnetId={subnet_id}")
         s, d = gn_api(token, uid, "POST", f"v2/{P}/servers", {
             "name":            params.get("name"),
             "flavorId":        params.get("flavorId"),
             "imageId":         params.get("imageId"),
             "networkId":       network_id,
-            "subnetId":        subnet_id or None,
+            "subnetId":        subnet_id,
             "rootDiskSize":    params.get("rootDiskSize", 40),
             "rootDiskTypeId":  params.get("rootDiskTypeId"),
             "encryptionVolume": False,
