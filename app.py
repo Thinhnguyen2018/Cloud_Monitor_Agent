@@ -2178,38 +2178,78 @@ def execute_extended_action(token, uid, project_id, action_type, params):
                     if d.get(k): return d[k]
             return []
 
-        # Always re-fetch subnets to get real IDs
+        # ── Fetch subnets — try multiple strategies ──────────────────────────────
+        _subnets  = []
+        _networks = []
+
+        # Strategy 1: GET /subnets
         sn_s, sn_d = gn_api(token, uid, "GET", f"v2/{P}/subnets")
         _subnets = _parse_list(sn_d)
-        print(f"[VM_CREATE] /subnets -> status={sn_s} type={type(sn_d).__name__} count={len(_subnets)} sample={str(_subnets[:1])[:200]}")
+        print(f"[VM_CREATE] /subnets -> status={sn_s} raw_type={type(sn_d).__name__} count={len(_subnets)} raw={str(sn_d)[:300]}")
 
-        # Fallback: try per-network subnets endpoint
-        if not _subnets:
-            nw_s, nw_d = gn_api(token, uid, "GET", f"v2/{P}/networks")
-            _networks = _parse_list(nw_d)
-            print(f"[VM_CREATE] /networks -> status={nw_s} count={len(_networks)}")
-            for _net in _networks[:3]:
-                _nid = _net.get("uuid") or _net.get("id") or ""
-                if not _nid: continue
+        # Strategy 2: GET /networks — also extract embedded subnets from each network object
+        nw_s, nw_d = gn_api(token, uid, "GET", f"v2/{P}/networks")
+        _networks = _parse_list(nw_d)
+        print(f"[VM_CREATE] /networks -> status={nw_s} count={len(_networks)} raw={str(nw_d)[:300]}")
+
+        if not _subnets and _networks:
+            for _net in _networks:
+                _nid = _net.get("uuid") or _net.get("id") or _net.get("networkId") or ""
+                _net_name = _net.get("name","?")
+                print(f"[VM_CREATE] network object keys: {list(_net.keys())} nid={_nid}")
+
+                # 2a: subnet embedded in network object
+                _embedded = (_net.get("subnets") or _net.get("subnetList") or
+                             _net.get("subnetObjects") or [])
+                if isinstance(_embedded, list) and _embedded:
+                    print(f"[VM_CREATE] embedded subnets in network {_net_name}: {_embedded[:1]}")
+                    _subnets = _embedded
+                    # Attach networkId if missing
+                    for _s in _subnets:
+                        if not (_s.get("networkId") or _s.get("networkUuid")):
+                            _s["networkId"] = _nid
+                    break
+
+                if not _nid:
+                    continue
+
+                # 2b: GET /networks/{id}/subnets
                 ns_s, ns_d = gn_api(token, uid, "GET", f"v2/{P}/networks/{_nid}/subnets")
                 _nsubs = _parse_list(ns_d)
-                print(f"[VM_CREATE] /networks/{_nid}/subnets -> status={ns_s} count={len(_nsubs)} sample={str(_nsubs[:1])[:200]}")
+                print(f"[VM_CREATE] /networks/{_nid}/subnets -> status={ns_s} count={len(_nsubs)} raw={str(ns_d)[:300]}")
                 if _nsubs:
                     _subnets = _nsubs
+                    for _s in _subnets:
+                        if not (_s.get("networkId") or _s.get("networkUuid")):
+                            _s["networkId"] = _nid
                     break
 
         if _subnets:
             _sn = _subnets[0]
-            # Try all possible field names for subnet/network ID
+            print(f"[VM_CREATE] using subnet object: {_sn}")
+            # Extract subnet ID — try every possible field name
             subnet_id  = (subnet_id  or
                           _sn.get("id") or _sn.get("uuid") or
-                          _sn.get("subnetId") or _sn.get("subnetUuid") or "")
+                          _sn.get("subnetId") or _sn.get("subnetUuid") or
+                          _sn.get("subnetID") or "")
+            # Extract network ID — from subnet object or from first network
             network_id = (network_id or
                           _sn.get("networkId") or _sn.get("networkUuid") or
-                          _sn.get("vpcId") or _sn.get("vpcUuid") or "")
+                          _sn.get("vpcId") or _sn.get("vpcUuid") or
+                          (_networks[0].get("uuid") or _networks[0].get("id") if _networks else ""))
+        elif _networks and not subnet_id:
+            # Last resort: use first network ID, hope API accepts without subnetId
+            _net0 = _networks[0]
+            network_id = network_id or _net0.get("uuid") or _net0.get("id") or ""
+            print(f"[VM_CREATE] WARNING: no subnet found, using network only networkId={network_id}")
 
         if not network_id or not subnet_id:
-            return False, {"message": f"Không lấy được network/subnet từ tài khoản (networkId={repr(network_id)}, subnetId={repr(subnet_id)}). Vui lòng kiểm tra credentials hoặc tạo VPC trước."}
+            return False, {"message": (
+                f"Không lấy được network/subnet. "
+                f"networkId={repr(network_id)} subnetId={repr(subnet_id)}. "
+                f"networks={len(_networks)} subnets={len(_subnets)}. "
+                f"Vui lòng kiểm tra VPC/Subnet trong tài khoản GreenNode."
+            )}
 
         print(f"[VM_CREATE] final networkId={network_id} subnetId={subnet_id}")
         s, d = gn_api(token, uid, "POST", f"v2/{P}/servers", {
