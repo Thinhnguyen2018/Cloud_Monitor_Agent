@@ -2076,13 +2076,13 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     if action_type == "volume_detach":
         volume_id   = params.get("volumeId")
         volume_name = params.get("volumeName", "")
-        server_id   = params.get("serverId", "")
+        server_id   = params.get("serverId", "").replace("ins-", "")  # detach needs raw UUID
         # Block detach of boot volume
         if "boot" in volume_name.lower():
             return False, {"message": "Không thể gỡ boot volume — đây là ổ đĩa hệ thống của VM"}
         s, d = gn_api(token, uid, "PUT",
-            f"v2/{P}/volumes/{volume_id}/servers/{server_id}/detach",
-            {"persistentVolume": True, "tags": []})
+            f"v2/{P}/volumes/{volume_id}/servers/{server_id}/detach", {})
+        print(f"[DETACH] vol={volume_id} srv={server_id} -> {s} {str(d)[:150]}")
         return s in OK, d
 
     # ── FIP associate ────────────────────────────────────────────────────────
