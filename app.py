@@ -2182,14 +2182,14 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         _subnets  = []
         _networks = []
 
-        # Strategy 1: GET /subnets
+        # Strategy 1: GET /subnets (may be 403 if IAM doesn't allow it)
         sn_s, sn_d = gn_api(token, uid, "GET", f"v2/{P}/subnets")
-        _subnets = _parse_list(sn_d)
-        print(f"[VM_CREATE] /subnets -> status={sn_s} raw_type={type(sn_d).__name__} count={len(_subnets)} raw={str(sn_d)[:300]}")
+        _subnets = _parse_list(sn_d) if sn_s == 200 else []
+        print(f"[VM_CREATE] /subnets -> status={sn_s} count={len(_subnets)} raw={str(sn_d)[:200]}")
 
-        # Strategy 2: GET /networks — also extract embedded subnets from each network object
+        # Strategy 2: GET /networks — extract embedded subnets or call per-network endpoint
         nw_s, nw_d = gn_api(token, uid, "GET", f"v2/{P}/networks")
-        _networks = _parse_list(nw_d)
+        _networks = _parse_list(nw_d) if nw_s == 200 else []
         print(f"[VM_CREATE] /networks -> status={nw_s} count={len(_networks)} raw={str(nw_d)[:300]}")
 
         if not _subnets and _networks:
