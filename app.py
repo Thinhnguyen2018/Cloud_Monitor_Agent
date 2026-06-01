@@ -2076,7 +2076,9 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     if action_type == "volume_detach":
         volume_id   = params.get("volumeId")
         volume_name = params.get("volumeName", "")
-        server_id   = params.get("serverId", "").replace("ins-", "")  # detach needs raw UUID
+        server_id   = params.get("serverId", "")
+        if server_id and not server_id.startswith("ins-"):
+            server_id = "ins-" + server_id  # keep ins- prefix like attach
         # Block detach of boot volume
         if "boot" in volume_name.lower():
             return False, {"message": "Không thể gỡ boot volume — đây là ổ đĩa hệ thống của VM"}
