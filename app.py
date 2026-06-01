@@ -2244,11 +2244,12 @@ def execute_extended_action(token, uid, project_id, action_type, params):
             print(f"[VM_CREATE] WARNING: no subnet found, using network only networkId={network_id}")
 
         if not network_id or not subnet_id:
+            _sn_debug = str(_subnets[0]) if _subnets else "none"
             return False, {"message": (
                 f"Không lấy được network/subnet. "
                 f"networkId={repr(network_id)} subnetId={repr(subnet_id)}. "
                 f"networks={len(_networks)} subnets={len(_subnets)}. "
-                f"Vui lòng kiểm tra VPC/Subnet trong tài khoản GreenNode."
+                f"subnet_obj={_sn_debug[:300]}"
             )}
 
         print(f"[VM_CREATE] final networkId={network_id} subnetId={subnet_id}")
