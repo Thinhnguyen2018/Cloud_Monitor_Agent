@@ -2224,6 +2224,8 @@ def execute_extended_action(token, uid, project_id, action_type, params):
                             _s["networkId"] = _nid
                     break
 
+        _subnet_zone = ""   # zone name detected from subnet, passed as zoneId to API
+
         if _subnets:
             _sn = _subnets[0]
             print(f"[VM_CREATE] using subnet object: {_sn}")
@@ -2245,6 +2247,7 @@ def execute_extended_action(token, uid, project_id, action_type, params):
             if _zone_name and "-" in _zone_name:
                 _region = _zone_name[:3]   # e.g. "HCM"
                 _zone   = _zone_name       # e.g. "HCM03-1B"
+                _subnet_zone = _zone_name  # pass as zoneId in POST body
                 print(f"[VM_CREATE] subnet zone detected: region={_region} zone={_zone}")
                 # Re-resolve IDs from correct zone's reference data using stored names
                 _flavor_name = params.get("flavorName", "")
@@ -2280,7 +2283,7 @@ def execute_extended_action(token, uid, project_id, action_type, params):
             )}
 
         def _build_server_body():
-            return {
+            body = {
                 "name":            params.get("name"),
                 "flavorId":        params.get("flavorId"),
                 "imageId":         params.get("imageId"),
@@ -2291,9 +2294,13 @@ def execute_extended_action(token, uid, project_id, action_type, params):
                 "encryptionVolume": False,
                 "attachFloating":  params.get("attachFloating", False),
                 "sshKeyId":        params.get("sshKeyId") or None,
-                "secgroupIds":     params.get("secgroupIds", []),
+                "securityGroup":   params.get("secgroupIds") or params.get("securityGroup") or [],
                 "tags":            [],
             }
+            # Include zoneId if detected from subnet
+            if _subnet_zone:
+                body["zoneId"] = _subnet_zone
+            return body
 
         print(f"[VM_CREATE] POST /servers flavorId={params.get('flavorId')} imageId={params.get('imageId')}")
         s, d = gn_api(token, uid, "POST", f"v2/{P}/servers", _build_server_body())
