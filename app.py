@@ -2057,14 +2057,10 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     if action_type == "volume_attach":
         volume_id = params.get("volumeId")
         server_id = params.get("serverId", "").replace("ins-", "")
-        zone_id   = params.get("zoneId", "")
-        print(f"[ATTACH] vol={volume_id} srv={server_id} zoneId={zone_id}")
-        attach_body = {"persistentVolume": True, "tags": []}
-        if zone_id:
-            attach_body["zoneId"] = zone_id
+        print(f"[ATTACH] vol={volume_id} srv={server_id}")
+        # AttachVolumeRequest body is empty per Terraform provider spec
         s, d = gn_api(token, uid, "PUT",
-            f"v2/{P}/volumes/{volume_id}/servers/{server_id}/attach",
-            attach_body)
+            f"v2/{P}/volumes/{volume_id}/servers/{server_id}/attach", {})
         print(f"[ATTACH] -> {s} {str(d)[:200]}")
         return s in OK, d
 
