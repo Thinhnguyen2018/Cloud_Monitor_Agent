@@ -622,9 +622,13 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         if vm and vol:
             vol_id   = vol.get("uuid") or vol.get("id") or vol.get("volumeId")
             vol_name = vol.get("name") or vol.get("volumeName")
-            # zoneId must be the UUID from volumeType.zoneId, not the zone name
-            vol_type = vol.get("volumeType") or {}
-            zone_id  = vol_type.get("zoneId") or vol.get("zoneId") or "0745BE12-9433-4DD4-90A1-384631504EBE"
+            # zoneId: use volumeTypeZoneName (e.g. "HCM03-1B") or zone uuid from volume
+            vol_type  = vol.get("volumeType") or {}
+            _zone_obj = vol.get("zone") or {}
+            zone_id   = (vol.get("volumeTypeZoneName") or
+                         (vol_type.get("zoneId")) or
+                         (_zone_obj.get("name") if isinstance(_zone_obj, dict) else "") or
+                         vol.get("zoneId") or "")
             return ("volume_attach",
                     {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
                      "volumeId": vol_id, "volumeName": vol_name, "zoneId": zone_id},
@@ -2053,12 +2057,15 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     if action_type == "volume_attach":
         volume_id = params.get("volumeId")
         server_id = params.get("serverId", "").replace("ins-", "")
-        zone_id   = params.get("zoneId", "0745BE12-9433-4DD4-90A1-384631504EBE")
-        print(f"[ATTACH] vol={volume_id} srv={server_id}")
+        zone_id   = params.get("zoneId", "")
+        print(f"[ATTACH] vol={volume_id} srv={server_id} zoneId={zone_id}")
+        attach_body = {"persistentVolume": True, "tags": []}
+        if zone_id:
+            attach_body["zoneId"] = zone_id
         s, d = gn_api(token, uid, "PUT",
             f"v2/{P}/volumes/{volume_id}/servers/{server_id}/attach",
-            {"persistentVolume": True, "tags": [], "zoneId": zone_id})
-        print(f"[ATTACH] -> {s} {str(d)[:150]}")
+            attach_body)
+        print(f"[ATTACH] -> {s} {str(d)[:200]}")
         return s in OK, d
 
     # ── Volume detach ────────────────────────────────────────────────────────
