@@ -2157,20 +2157,43 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     # POST /v2/{projectId}/servers
     # Required: name, flavorId, imageId, networkId, subnetId, rootDiskSize, rootDiskTypeId, encryptionVolume
     if action_type == "vm_create":
+        network_id = params.get("networkId") or ""
+        subnet_id  = params.get("subnetId")  or ""
+
+        # If networkId/subnetId missing, auto-fetch from account
+        if not network_id or not subnet_id:
+            sn_s, sn_d = gn_api(token, uid, "GET", f"v2/{P}/subnets")
+            _subnets = sn_d.get("listData", []) if sn_s == 200 else []
+            if not _subnets:
+                # Try networks endpoint as fallback
+                nw_s, nw_d = gn_api(token, uid, "GET", f"v2/{P}/networks")
+                _networks = nw_d.get("listData", []) if nw_s == 200 else []
+                if _networks:
+                    network_id = _networks[0].get("uuid") or _networks[0].get("id", "")
+            else:
+                _sn = _subnets[0]
+                subnet_id  = subnet_id  or _sn.get("id") or _sn.get("uuid", "")
+                network_id = network_id or _sn.get("networkId") or _sn.get("networkUuid", "")
+            print(f"[VM_CREATE] auto-resolved networkId={network_id} subnetId={subnet_id}")
+
+        if not network_id:
+            return False, {"message": "networkId: must not be blank — không lấy được network từ tài khoản. Vui lòng kiểm tra credentials."}
+
         s, d = gn_api(token, uid, "POST", f"v2/{P}/servers", {
             "name":            params.get("name"),
             "flavorId":        params.get("flavorId"),
             "imageId":         params.get("imageId"),
-            "networkId":       params.get("networkId"),
-            "subnetId":        params.get("subnetId"),
-            "rootDiskSize":    params.get("rootDiskSize", 20),
+            "networkId":       network_id,
+            "subnetId":        subnet_id or None,
+            "rootDiskSize":    params.get("rootDiskSize", 40),
             "rootDiskTypeId":  params.get("rootDiskTypeId"),
             "encryptionVolume": False,
             "attachFloating":  params.get("attachFloating", False),
-            "sshKeyId":        params.get("sshKeyId"),
+            "sshKeyId":        params.get("sshKeyId") or None,
             "secgroupIds":     params.get("secgroupIds", []),
             "tags":            [],
         })
+        print(f"[VM_CREATE] POST /servers -> {s} {str(d)[:200]}")
         return s in OK, d
 
     # ── Resize VM ─────────────────────────────────────────────────────────────
