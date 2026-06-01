@@ -770,8 +770,11 @@ def resolve_vm_create_params(message, flavors, images, subnets, networks, sshkey
     msg = message.lower()
 
     # ── VM name ───────────────────────────────────────────────────────────────
-    name_m = re.search(r'(?:tên|name)[:\s]+([^\s,;|]+)', message, re.IGNORECASE)
-    vm_name = name_m.group(1) if name_m else None
+    name_m = re.search(r'(?:tên|name)[:\s]+"([^"]+)"|(?:tên|name)[:\s]+([^\s,;|]+)', message, re.IGNORECASE)
+    if name_m:
+        vm_name = name_m.group(1) or name_m.group(2)
+    else:
+        vm_name = None
     if not vm_name:
         # Fallback: first token that looks like a hostname
         for w in message.split():
@@ -780,6 +783,13 @@ def resolve_vm_create_params(message, flavors, images, subnets, networks, sshkey
                     "windows","debian","rocky","subnet","network","ssh","key","disk","floating"):
                 vm_name = w
                 break
+    # Sanitize: replace spaces/invalid chars with hyphens, enforce length 5-242
+    if vm_name:
+        vm_name = re.sub(r'[^a-zA-Z0-9.\-]', '-', vm_name)
+        vm_name = re.sub(r'-+', '-', vm_name).strip('-')
+        if len(vm_name) < 5:
+            vm_name = (vm_name + '-----')[:5]
+        vm_name = vm_name[:242]
 
     # ── Flavor — match by vCPU+RAM spec or by name ───────────────────────────
     flavor = None
@@ -877,11 +887,20 @@ def resolve_vm_create_params(message, flavors, images, subnets, networks, sshkey
     if missing:
         return None, f"Còn thiếu: {', '.join(missing)}."
 
+    # Resolve imageId — must be a UUID, not an OS-name string
+    _raw_iid = (image.get("uuid") or image.get("imageUuid") or
+                image.get("id") or image.get("imageId") or "")
+    # Validate: accept 36-char UUID or img- prefixed IDs; reject plain words like "Ubuntu"
+    _image_id = _raw_iid if re.match(r'^[0-9a-fA-F\-]{36}$|^img-', str(_raw_iid)) else None
+    if not _image_id:
+        return None, (f"Không tìm được UUID của image '{image.get('name', '?')}'. "
+                      f"Các field có sẵn: {list(image.keys())}")
+
     return {
         "name":           vm_name,
         "flavorId":       flavor.get("id") or flavor.get("flavorId"),
         "flavorName":     flavor.get("name"),
-        "imageId":        image.get("id") or image.get("imageId"),
+        "imageId":        _image_id,
         "imageName":      image.get("name"),
         "networkId":      (subnet.get("networkId") or subnet.get("networkUuid")
                            or (network.get("uuid") if network else "")),
