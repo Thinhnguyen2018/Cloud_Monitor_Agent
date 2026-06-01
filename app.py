@@ -2243,8 +2243,25 @@ def execute_extended_action(token, uid, project_id, action_type, params):
             # Detect zone from subnet and re-resolve flavor/image/voltype IDs for that zone
             _zone_obj  = _sn.get("zone") or {}
             _zone_name = (_zone_obj.get("name") if isinstance(_zone_obj, dict) else str(_zone_obj)) or ""
-            # zone_name like "HCM03-1B" → region="HCM", zone="HCM03-1B"
+            print(f"[VM_CREATE] raw zone from subnet: {repr(_zone_name)}")
+
+            # Normalize short zone name to full name: "HCM-1B" → "HCM03-1B"
+            def _normalize_zone(zn):
+                if not zn or "-" not in zn:
+                    return zn
+                _rgn = zn[:3]  # "HCM" or "HAN"
+                _suffix = zn.split("-")[-1]  # "1B", "1A", "1C"
+                # Scan reference dirs for matching zone
+                _ref_region_dir = os.path.join(_REF_DIR, _rgn)
+                if os.path.isdir(_ref_region_dir):
+                    for _d in sorted(os.listdir(_ref_region_dir)):
+                        if _d.endswith("-" + _suffix) and os.path.isdir(os.path.join(_ref_region_dir, _d)):
+                            return _d  # e.g. "HCM03-1B"
+                return zn  # fallback to original
+
+            # zone_name like "HCM03-1B" or "HCM-1B" → normalize to "HCM03-1B"
             if _zone_name and "-" in _zone_name:
+                _zone_name = _normalize_zone(_zone_name)
                 _region = _zone_name[:3]   # e.g. "HCM"
                 _zone   = _zone_name       # e.g. "HCM03-1B"
                 _subnet_zone = _zone_name  # pass as zoneId in POST body
