@@ -22,6 +22,65 @@ import pytz
 
 load_dotenv()  # load .env file automatically
 
+# ── Static reference data (images / flavors / volume-types per region/zone) ───
+_REF_DIR = os.path.join(os.path.dirname(__file__), "references")
+
+def _load_ref(region: str, zone: str, kind: str) -> dict:
+    """Load references/{region}/{zone}/{kind}.json — return {} on missing."""
+    path = os.path.join(_REF_DIR, region, zone, f"{kind}.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def ref_images(region="HCM", zone="HCM03-1A") -> list:
+    """Flat list of {name, id, os, version} from static reference."""
+    d = _load_ref(region, zone, "images")
+    out = []
+    for os_family, versions in d.get("images", {}).items():
+        for ver_name, meta in versions.items():
+            if isinstance(meta, dict) and meta.get("id"):
+                out.append({
+                    "name": ver_name,
+                    "id":   meta["id"],
+                    "os":   os_family,
+                    "uefi": meta.get("uefi", False),
+                    "recommended": meta.get("recommended", False),
+                })
+    return out
+
+def ref_flavors(region="HCM", zone="HCM03-1A") -> list:
+    """Flat list of {name, id, cpu, ram_gb, preferred} from static reference."""
+    d = _load_ref(region, zone, "flavors")
+    out = []
+    for flav_name, meta in d.get("flavors", {}).items():
+        if isinstance(meta, dict) and meta.get("id"):
+            out.append({
+                "name":      flav_name,
+                "id":        meta["id"],
+                "cpu":       meta.get("cpu", 0),
+                "ram_gb":    meta.get("ram_gb", 0),
+                "family":    meta.get("family", ""),
+                "preferred": meta.get("preferred", False),
+                "deprecated":meta.get("deprecated", False),
+            })
+    return out
+
+def ref_vol_types(region="HCM", zone="HCM03-1A") -> list:
+    """Flat list of {name, id, iops, default} from static reference."""
+    d = _load_ref(region, zone, "volume-types")
+    out = []
+    for vt_name, meta in d.get("volume_types", {}).items():
+        if isinstance(meta, dict) and meta.get("id"):
+            out.append({
+                "name":    vt_name,
+                "id":      meta["id"],
+                "iops":    meta.get("iops", 0),
+                "default": meta.get("default", False),
+            })
+    return out
+
 # ── Admin auth config ─────────────────────────────────────────────────────────
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "greennode2025")
@@ -762,117 +821,137 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
     return (None, None, None)
 
 
-def resolve_vm_create_params(message, flavors, images, subnets, networks, sshkeys, vol_types):
+def resolve_vm_create_params(message, flavors, images, subnets, networks, sshkeys, vol_types,
+                              region="HCM", zone="HCM03-1A"):
     """
     Parse a free-text VM creation request and resolve human-readable names → real IDs.
+    Uses static reference data (references/) for images/flavors/vol-types to guarantee
+    correct IDs. Subnets/networks/sshkeys still come from live API.
     Returns (params_dict, None) on success, or (None, error_message) when info is missing.
     """
     msg = message.lower()
 
     # ── VM name ───────────────────────────────────────────────────────────────
     name_m = re.search(r'(?:tên|name)[:\s]+"([^"]+)"|(?:tên|name)[:\s]+([^\s,;|]+)', message, re.IGNORECASE)
-    if name_m:
-        vm_name = name_m.group(1) or name_m.group(2)
-    else:
-        vm_name = None
+    vm_name = (name_m.group(1) or name_m.group(2)) if name_m else None
     if not vm_name:
-        # Fallback: first token that looks like a hostname
+        SKIP = {"tạo","tao","tên","ten","vm","server","may","máy","flavor","os",
+                "ubuntu","centos","windows","debian","rocky","alma","rhel","debian",
+                "subnet","network","ssh","key","disk","floating","vcpu","cpu","core",
+                "gb","ram","create","tao","new","moi","mới"}
         for w in message.split():
-            if re.match(r'^[a-zA-Z][a-zA-Z0-9\-_.]{1,}$', w) and w.lower() not in (
-                    "tạo","tên","vm","server","máy","flavor","os","ubuntu","centos",
-                    "windows","debian","rocky","subnet","network","ssh","key","disk","floating"):
-                vm_name = w
-                break
-    # Sanitize: replace spaces/invalid chars with hyphens, enforce length 5-242
+            if re.match(r'^[a-zA-Z][a-zA-Z0-9\-_.]{1,}$', w) and w.lower() not in SKIP:
+                vm_name = w; break
     if vm_name:
         vm_name = re.sub(r'[^a-zA-Z0-9.\-]', '-', vm_name)
         vm_name = re.sub(r'-+', '-', vm_name).strip('-')
-        if len(vm_name) < 5:
-            vm_name = (vm_name + '-----')[:5]
+        if len(vm_name) < 5: vm_name = (vm_name + '-----')[:5]
         vm_name = vm_name[:242]
 
-    # ── Flavor — match by vCPU+RAM spec or by name ───────────────────────────
+    # ── Flavor — from static reference, match by cpu+ram spec ────────────────
+    ref_flavs = ref_flavors(region, zone)
+    # prefer s2/preferred flavors
+    preferred = [f for f in ref_flavs if f.get("preferred") and not f.get("deprecated")]
+    search_flavs = preferred if preferred else ref_flavs
+
     flavor = None
     cpu_m = re.search(r'(\d+)\s*(?:vcpu|cpu|core)', msg)
-    # RAM: "8gb" but NOT "40gb disk / 40gb root"
-    ram_m = re.search(r'(\d+)\s*gb(?!\s*(?:disk|root|ssd|hdd|ổ))', msg)
+    ram_m = re.search(r'(\d+)\s*gb(?!\s*(?:disk|root|ssd|hdd|ổ|storage))', msg)
     if cpu_m or ram_m:
-        want_cpu    = int(cpu_m.group(1)) if cpu_m else None
-        want_ram_mb = int(ram_m.group(1)) * 1024 if ram_m else None
-        for f in flavors:
-            f_cpu = int(f.get("vcpus") or f.get("cpu") or 0)
-            f_ram = int(f.get("ram") or 0)
-            cpu_ok = (want_cpu is None)    or f_cpu == want_cpu
-            ram_ok = (want_ram_mb is None) or abs(f_ram - want_ram_mb) < 512
+        want_cpu = int(cpu_m.group(1)) if cpu_m else None
+        want_ram = int(ram_m.group(1)) if ram_m else None
+        for f in search_flavs:
+            cpu_ok = (want_cpu is None) or f["cpu"] == want_cpu
+            ram_ok = (want_ram is None) or f["ram_gb"] == want_ram
             if cpu_ok and ram_ok:
-                flavor = f
-                break
+                flavor = f; break
+        # relax: match cpu only if ram not found
+        if not flavor and want_cpu:
+            for f in search_flavs:
+                if f["cpu"] == want_cpu:
+                    flavor = f; break
     if not flavor:
-        for f in flavors:
-            if (f.get("name") or "").lower() in msg:
-                flavor = f
-                break
+        # name match
+        for f in search_flavs:
+            if f["name"].lower() in msg:
+                flavor = f; break
 
-    # ── Image — match by OS name + version ───────────────────────────────────
+    # ── Image — from static reference ────────────────────────────────────────
+    ref_imgs = ref_images(region, zone)
     image = None
     OS_PATTERNS = [
-        ("ubuntu", r'ubuntu[\s\-]*([\d.]+)?'),
-        ("centos", r'centos[\s\-]*([\d.]+)?'),
-        ("windows", r'windows[\s\-]*([\d.]+)?'),
-        ("debian", r'debian[\s\-]*([\d.]+)?'),
-        ("rocky",  r'rocky[\s\-]*([\d.]+)?'),
-        ("almalinux", r'alma[\s\-]*([\d.]+)?'),
+        ("ubuntu",     r'ubuntu[\s\-_]*([\d.]+)?'),
+        ("centos",     r'centos[\s\-_]*([\d.]+)?'),
+        ("windows",    r'windows[\s\-_]*(server[\s\-_]*)?([\d.]+)?'),
+        ("debian",     r'debian[\s\-_]*([\d.]+)?'),
+        ("rocky",      r'rocky[\s\-_]*([\d.]+)?'),
+        ("almalinux",  r'alma[\s\-_]*([\d.]+)?'),
+        ("rhel",       r'rhel[\s\-_]*([\d.]+)?'),
+        ("opensuse",   r'opensuse[\s\-_]*([\d.]+)?'),
+        ("oracle",     r'oracle[\s\-_]*([\d.]+)?'),
     ]
     for os_kw, pat in OS_PATTERNS:
-        if os_kw in msg:
-            ver_m   = re.search(pat, msg)
-            version = ver_m.group(1).strip() if ver_m and ver_m.group(1) else None
-            for i in images:
-                iname = (i.get("name") or "").lower()
-                if os_kw in iname and (not version or version in iname):
-                    image = i
-                    break
-            if image:
-                break
-    if not image:
-        # Generic: match any image whose name words appear in message
-        for i in images:
-            iname = (i.get("name") or "").lower()
-            words = [w for w in re.split(r'[\s\-_.]', iname) if len(w) > 3]
-            if words and all(w in msg for w in words[:2]):
-                image = i
-                break
+        if os_kw not in msg and os_kw.replace("linux","") not in msg:
+            continue
+        ver_m = re.search(pat, msg)
+        # extract version number from last group
+        version = None
+        if ver_m:
+            for g in reversed(ver_m.groups()):
+                if g and re.search(r'\d', g):
+                    version = g.strip(); break
+        # Score each matching image
+        best, best_score = None, -1
+        for i in ref_imgs:
+            iname = i["name"].lower()
+            ios   = i.get("os","").lower()
+            if os_kw not in iname and os_kw not in ios:
+                continue
+            score = 0
+            if version and version in iname: score += 10
+            if i.get("recommended"):         score += 5
+            if "uefi" not in iname:          score += 1   # prefer non-UEFI when not specified
+            if score > best_score:
+                best, best_score = i, score
+        if best:
+            image = best; break
 
-    # ── Subnet — match by name, fallback to first ────────────────────────────
+    if not image:
+        # generic fallback: any image whose name tokens appear in message
+        for i in ref_imgs:
+            words = [w for w in re.split(r'[\s\-_.]', i["name"].lower()) if len(w) > 3]
+            if words and all(w in msg for w in words[:2]):
+                image = i; break
+
+    # ── Subnet — from live API ────────────────────────────────────────────────
     subnet = None
     for s in subnets:
         if (s.get("name") or "").lower() in msg:
-            subnet = s
-            break
+            subnet = s; break
     if not subnet and subnets:
         subnet = subnets[0]
 
-    # ── Network from subnet ───────────────────────────────────────────────────
     network = None
     if subnet:
         net_id = subnet.get("networkId") or subnet.get("networkUuid")
-        network = next((n for n in networks if n.get("uuid") == net_id or n.get("id") == net_id), None)
+        network = next((n for n in networks
+                        if n.get("uuid") == net_id or n.get("id") == net_id), None)
 
     # ── SSH key ───────────────────────────────────────────────────────────────
     sshkey = None
     for k in sshkeys:
         if (k.get("name") or "").lower() in msg:
-            sshkey = k
-            break
+            sshkey = k; break
 
     # ── Root disk size ────────────────────────────────────────────────────────
-    disk_m = re.search(r'(?:disk|root|ổ\s*cứng)[^\d]*(\d+)\s*gb', msg)
+    disk_m = re.search(r'(?:disk|root|ổ\s*cứng|storage)[^\d]*(\d+)\s*gb', msg)
     if not disk_m:
         disk_m = re.search(r'(\d+)\s*gb[^\w]*(?:disk|root|ổ)', msg)
     root_disk = int(disk_m.group(1)) if disk_m else 40
 
-    # ── Volume type (default first) ───────────────────────────────────────────
-    vol_type = vol_types[0] if vol_types else {}
+    # ── Volume type — from static reference ──────────────────────────────────
+    ref_vts = ref_vol_types(region, zone)
+    vol_type = next((v for v in ref_vts if v.get("default")), ref_vts[0] if ref_vts else {})
 
     # ── Floating IP ───────────────────────────────────────────────────────────
     want_fip = (any(w in msg for w in ["floating", "wan", "public ip", "ip công cộng"])
@@ -880,37 +959,28 @@ def resolve_vm_create_params(message, flavors, images, subnets, networks, sshkey
 
     # ── Validation ───────────────────────────────────────────────────────────
     missing = []
-    if not vm_name:  missing.append("**tên VM**")
-    if not flavor:   missing.append(f"**flavor** (ví dụ: 2 vCPU 4GB)")
-    if not image:    missing.append("**hệ điều hành** (Ubuntu 22.04, CentOS 7…)")
-    if not subnet:   missing.append("**subnet / network**")
+    if not vm_name: missing.append("**tên VM**")
+    if not flavor:  missing.append("**flavor** (ví dụ: 2vCPU 4GB)")
+    if not image:   missing.append("**hệ điều hành** (Ubuntu 22.04, CentOS 7…)")
+    if not subnet:  missing.append("**subnet / network**")
     if missing:
         return None, f"Còn thiếu: {', '.join(missing)}."
 
-    # Resolve imageId — must be a UUID, not an OS-name string
-    # Log ALL fields so we can identify the correct key from GreenNode API
-    print(f"[IMAGE_DEBUG] matched image keys={list(image.keys())} values={dict(image)}")
-    _raw_iid = (image.get("uuid") or image.get("imageUuid") or
-                image.get("imageId") or image.get("id") or "")
-    # Validate: accept 36-char UUID or img- prefixed IDs; reject plain words like "Ubuntu"
-    _image_id = _raw_iid if re.match(r'^[0-9a-fA-F\-]{36}$|^img-', str(_raw_iid)) else None
-    if not _image_id:
-        print(f"[IMAGE_DEBUG] FAIL — no UUID field found. Full object: {dict(image)}")
-        return None, (f"Không tìm được UUID của image '{image.get('name', '?')}'. "
-                      f"Các field: {dict(image)}")
+    print(f"[RESOLVE] name={vm_name} flavorId={flavor['id']} imageId={image['id']} "
+          f"flavor={flavor['name']} image={image['name']}")
 
     return {
         "name":           vm_name,
-        "flavorId":       flavor.get("id") or flavor.get("flavorId"),
-        "flavorName":     flavor.get("name"),
-        "imageId":        _image_id,
-        "imageName":      image.get("name"),
+        "flavorId":       flavor["id"],
+        "flavorName":     flavor["name"],
+        "imageId":        image["id"],
+        "imageName":      image["name"],
         "networkId":      (subnet.get("networkId") or subnet.get("networkUuid")
                            or (network.get("uuid") if network else "")),
         "subnetId":       subnet.get("id") or subnet.get("uuid"),
         "subnetName":     subnet.get("name"),
         "rootDiskSize":   root_disk,
-        "rootDiskTypeId": vol_type.get("id") or vol_type.get("uuid"),
+        "rootDiskTypeId": vol_type.get("id", ""),
         "sshKeyId":       (sshkey.get("id") or sshkey.get("uuid")) if sshkey else None,
         "secgroupIds":    [],
         "attachFloating": want_fip,
@@ -1242,35 +1312,29 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 reply = f"❌ **Thất bại:** {err}\n\nVui lòng thử lại hoặc kiểm tra trên GreenNode portal."
             return jsonify({"reply": reply, "fetchedAt": now, "actionDone": True})
 
-        # ── vm_create: re-resolve IDs from real API data before executing ──────
+        # ── vm_create: always re-resolve IDs from static reference data ────────
         if action_type == "vm_create":
-            # Re-run server-side resolver using original message or reconstruct spec
+            _spec = (f"tạo vm tên {params.get('name','')} "
+                     f"{params.get('imageName', params.get('imageId',''))} "
+                     f"{params.get('flavorName', params.get('flavorId',''))} "
+                     f"{params.get('subnetName','')}")
             _re_params, _re_err = resolve_vm_create_params(
-                # Reconstruct a spec string from stored params so resolver can match
-                f"tạo vm tên {params.get('name','')} "
-                f"{params.get('imageName', params.get('imageId',''))} "
-                f"{params.get('flavorName', params.get('flavorId',''))} "
-                f"{params.get('subnetName','')}",
-                flavors, images, subnets, networks, sshkeys, vol_types
-            )
+                _spec, flavors, images, subnets, networks, sshkeys, vol_types)
             if _re_params:
-                # Merge: keep any extra fields from original params, overlay resolved IDs
                 params = {**params, **_re_params}
-                print(f"[VM_CREATE_RESOLVED] resolved params={params}")
+                print(f"[VM_CREATE_RESOLVED] {params}")
             else:
-                # Resolver failed — validate that existing IDs look real
+                # Validate existing IDs against static reference
+                _ref_img_ids = {i["id"] for i in ref_images()}
+                _ref_flv_ids = {f["id"] for f in ref_flavors()}
                 _iid = str(params.get("imageId", ""))
                 _fid = str(params.get("flavorId", ""))
-                _real_img_ids = {str(i.get("uuid") or i.get("id") or "") for i in images}
-                _real_flv_ids = {str(f.get("id") or f.get("flavorId") or "") for f in flavors}
-                _iid_ok = _iid in _real_img_ids or re.match(r'^[0-9a-fA-F\-]{36}$', _iid)
-                _fid_ok = _fid in _real_flv_ids
-                if not _iid_ok or not _fid_ok:
-                    _bad = []
-                    if not _iid_ok: _bad.append(f"imageId `{_iid}` không hợp lệ")
-                    if not _fid_ok: _bad.append(f"flavorId `{_fid}` không hợp lệ")
+                _bad = []
+                if _iid not in _ref_img_ids: _bad.append(f"imageId `{_iid}` không hợp lệ")
+                if _fid not in _ref_flv_ids: _bad.append(f"flavorId `{_fid}` không hợp lệ")
+                if _bad:
                     reply = (f"❌ Không thể tạo VM — {'; '.join(_bad)}.\n\n"
-                             f"Hãy thử lại với mô tả đầy đủ hơn, ví dụ:\n"
+                             f"Hãy thử lại, ví dụ:\n"
                              f"> tạo vm tên my-server ubuntu 22.04 2vcpu 4gb")
                     return jsonify({"reply": reply, "fetchedAt": now, "actionDone": True})
 

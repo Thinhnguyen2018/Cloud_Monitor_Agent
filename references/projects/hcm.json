@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "updated": "2026-04-09",
+    "region": "HCM",
+    "note": "Thêm project và secgroup của từng khách hàng vào đây"
+  },
+  "projects": {
+    "pro-630b49b9-3bfb-4693-b298-e5d62c519b4a": {
+      "name": "GreenNode-MSS",
+      "owner": "GreenNode",
+      "default_zone": "HCM03-1A",
+      "secgroups": {
+        "secg-4ddb382a-d822-4443-b55d-fe822236b5fb": { "name": "default", "default": true }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "updated": "2026-04-09",
+    "zone_uuid_hcm": "C0A35725-D807-4F38-AD05-4A1CDEB976F5",
+    "note": "Volume Type IDs theo zone HCM03. HAN cần verify riêng."
+  },
+  "volume_types": {
+    "NVME-3000":  { "id": "vtype-93a22a9f-1ec0-4e61-84fb-75ac181c13dc", "iops": 3000,  "throughput_mbs": 200, "min_gb": 1, "max_gb": 30000, "default": true  },
+    "NVME-5000":  { "id": "vtype-7a7a8610-34f5-11ee-be56-0242ac120002", "iops": 5000,  "throughput_mbs": 400, "min_gb": 1, "max_gb": 30000, "default": false },
+    "NVME-10000": { "id": "vtype-febd58d0-34f5-11ee-be56-0242ac120002", "iops": 10000, "throughput_mbs": 600, "min_gb": 1, "max_gb": 30000, "default": false },
+    "NVME-20000": { "id": "vtype-4c718c0e-34f6-11ee-be56-0242ac120002", "iops": 20000, "throughput_mbs": 600, "min_gb": 1, "max_gb": 30000, "default": false },
+    "NVME-40000": { "id": "vtype-538c5532-34f6-11ee-be56-0242ac120002", "iops": 40000, "throughput_mbs": 600, "min_gb": 1, "max_gb": 30000, "default": false },
+    "NVME-60000": { "id": "vtype-58ebc2f6-34f6-11ee-be56-0242ac120002", "iops": 60000, "throughput_mbs": 800, "min_gb": 1, "max_gb": 30000, "default": false }
+  }
+}

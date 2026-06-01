@@ -1,0 +1,52 @@
+{
+  "_meta": {
+    "region": "HAN",
+    "zone": "HAN01-1B",
+    "type": "NVME",
+    "updated": "2026-04-09"
+  },
+  "volume_types": {
+    "NVME-3000": {
+      "id": "vtype-ab5f8b3e-b89d-49f2-a183-4139ddc924ff",
+      "iops": 3000,
+      "throughput_mbs": 200,
+      "max_gb": 13000,
+      "default": true
+    },
+    "NVME-5000": {
+      "id": "vtype-2fc64a6c-38e3-4f08-93a5-18018cb3ab23",
+      "iops": 5000,
+      "throughput_mbs": 400,
+      "max_gb": 13000,
+      "default": false
+    },
+    "NVME-10000": {
+      "id": "vtype-a24af098-1d89-4a82-9927-d01ed28faed6",
+      "iops": 10000,
+      "throughput_mbs": 600,
+      "max_gb": 13000,
+      "default": false
+    },
+    "NVME-20000": {
+      "id": "vtype-88f414cc-b8f5-4479-95a3-f104fdb5f42e",
+      "iops": 20000,
+      "throughput_mbs": 600,
+      "max_gb": 13000,
+      "default": false
+    },
+    "NVME-40000": {
+      "id": "vtype-404c6202-43bf-467b-8d65-3d9809fd3db3",
+      "iops": 40000,
+      "throughput_mbs": 600,
+      "max_gb": 13000,
+      "default": false
+    },
+    "NVME-60000": {
+      "id": "vtype-16038374-f862-41a6-acc4-e21d24079833",
+      "iops": 60000,
+      "throughput_mbs": 800,
+      "max_gb": 13000,
+      "default": false
+    }
+  }
+}

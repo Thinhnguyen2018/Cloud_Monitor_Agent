@@ -1,0 +1,49 @@
+{
+  "_meta": {
+    "updated": "2026-04-17",
+    "note": "VKS node group image IDs — lấy tại VKS Portal > System Image. KHÁC với image VM thông thường.",
+    "regions": ["HCM", "HAN"]
+  },
+  "images": {
+    "Ubuntu": {
+      "v1.29.1": {
+        "id": "img-108b3a77-ab58-4000-9b3e-190d0b4b07fc",
+        "k8s_version": "v1.29.1"
+      },
+      "v1.29.1-vks.1724605200": {
+        "id": "img-e9e4240f-6534-47c3-b922-9489fdd30aa3",
+        "k8s_version": "v1.29.1-vks.1724605200"
+      },
+      "v1.29.13-vks.1740045600": {
+        "id": "img-53bccbb6-7db5-42c1-bcc2-fef9fd1dccdc",
+        "k8s_version": "v1.29.13-vks.1740045600",
+        "recommended": true
+      },
+      "v1.30.10-vks.1746550800": {
+        "id": "img-3ad86f53-f465-4cab-add5-e901f7adf5e5",
+        "k8s_version": "v1.30.10-vks.1746550800",
+        "latest": true
+      }
+    },
+    "Container-Optimized-OS": {
+      "v1.29.1-vks.1724605200": {
+        "id": "img-695c0118-b258-4968-8078-f3309411377c",
+        "k8s_version": "v1.29.1-vks.1724605200"
+      },
+      "v1.29.13-vks.1740045600": {
+        "id": "img-0d9c7cf5-0f77-420e-a034-49f3fc957b9e",
+        "k8s_version": "v1.29.13-vks.1740045600"
+      },
+      "v1.30.10-vks.1746550800": {
+        "id": "img-f7d2767a-a98e-499c-8401-2c3297290b3e",
+        "k8s_version": "v1.30.10-vks.1746550800",
+        "latest": true
+      }
+    }
+  },
+  "matching_rules": {
+    "default": "Ubuntu v1.29.13-vks.1740045600 → img-53bccbb6-...",
+    "latest": "Ubuntu v1.30.10-vks.1746550800 → img-3ad86f53-...",
+    "cos": "Container-Optimized-OS → dùng cho workload container-native"
+  }
+}

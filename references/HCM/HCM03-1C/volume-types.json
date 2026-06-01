@@ -1,0 +1,38 @@
+{
+  "_meta": {
+    "region": "HCM",
+    "zone": "HCM03-1C",
+    "type": "SSD only",
+    "updated": "2026-04-09"
+  },
+  "volume_types": {
+    "SSD-3000": {
+      "id": "vtype-e782f8e1-0569-11f0-a0a4-ec2a72332f83",
+      "iops": 3000,
+      "throughput_mbs": 200,
+      "max_gb": 5000,
+      "default": true
+    },
+    "SSD-3200": {
+      "id": "vtype-e782e5a7-0569-11f0-a0a4-ec2a72332f83",
+      "iops": 3200,
+      "throughput_mbs": 200,
+      "max_gb": 5000,
+      "default": false
+    },
+    "SSD-6400": {
+      "id": "vtype-e78306a0-0569-11f0-a0a4-ec2a72332f83",
+      "iops": 6400,
+      "throughput_mbs": 400,
+      "max_gb": 5000,
+      "default": false
+    },
+    "SSD-10000": {
+      "id": "vtype-e783127f-0569-11f0-a0a4-ec2a72332f83",
+      "iops": 10000,
+      "throughput_mbs": 400,
+      "max_gb": 5000,
+      "default": false
+    }
+  }
+}

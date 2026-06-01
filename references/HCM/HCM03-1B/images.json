@@ -1,0 +1,189 @@
+{
+  "_meta": {
+    "region": "HCM",
+    "zones": [
+      "HCM03-1A",
+      "HCM03-1B",
+      "HCM03-1C"
+    ],
+    "updated": "2026-04-09",
+    "note": "Cả 3 zone HCM dùng chung image IDs"
+  },
+  "images": {
+    "RedHat": {
+      "RHEL 9.2": {
+        "id": "img-dd64c5c7-099f-4b27-a9a0-bb052250058a",
+        "uefi": false
+      },
+      "RHEL 7.9": {
+        "id": "img-1d5d6cc3-8b22-44b2-9c0d-f1379b5357d1",
+        "uefi": false
+      },
+      "RHEL 8.9": {
+        "id": "img-508d22f8-cfb4-4b83-a6e3-335ed4573860",
+        "uefi": false
+      },
+      "RHEL 9.7": {
+        "id": "img-bd82e51f-60fb-4eef-b02d-b9326e001d03",
+        "uefi": false
+      },
+      "RHEL 10.1 UEFI": {
+        "id": "img-8eb60ea5-e897-4354-a00c-745c16c772ee",
+        "uefi": true
+      }
+    },
+    "Ubuntu": {
+      "Ubuntu 18.04": {
+        "id": "img-306fddf3-2ec1-4755-9da6-53ed33899e14",
+        "uefi": false
+      },
+      "Ubuntu 20.04": {
+        "id": "img-a34d639b-e070-46ff-8b91-addf4fac45b4",
+        "uefi": false
+      },
+      "Ubuntu 20.04 UEFI": {
+        "id": "img-6ec19d14-a481-4e95-a407-253d7f7147a0",
+        "uefi": true
+      },
+      "Ubuntu 22.04": {
+        "id": "img-b5bf635e-0456-4765-b493-31d5fcfc05aa",
+        "uefi": false
+      },
+      "Ubuntu 22.04 UEFI": {
+        "id": "img-5948b4a0-1a88-4254-bb36-cc0faa0c38e3",
+        "uefi": true,
+        "recommended": true
+      },
+      "Ubuntu 24.04 UEFI": {
+        "id": "img-34440a82-92fb-40bc-b79c-b1a2b49b93de",
+        "uefi": true
+      }
+    },
+    "Debian": {
+      "Debian 9": {
+        "id": "img-4800cb0f-2d7d-422f-bd49-a25f654ffd41",
+        "uefi": false
+      },
+      "Debian 10": {
+        "id": "img-a6bf0963-ee3e-494f-bdda-df19fb012a74",
+        "uefi": false
+      },
+      "Debian 12": {
+        "id": "img-8e8eb26c-b3f5-4f0f-ae17-d533c12d1061",
+        "uefi": false
+      },
+      "Debian Netinst 3CX": {
+        "id": "img-929b0e75-92c9-4308-a6ad-a3fc2d41130f",
+        "uefi": false
+      }
+    },
+    "CentOS": {
+      "CentOS 6.10": {
+        "id": "img-2c7975e6-c5d7-4c0c-b0e3-bd8ef1eb3090",
+        "uefi": false
+      },
+      "CentOS 7.6": {
+        "id": "img-64435775-4bc8-4d5d-86d8-fdbec7673169",
+        "uefi": false
+      },
+      "CentOS 7.8": {
+        "id": "img-b9d45865-a9f0-4b53-a468-024815f30204",
+        "uefi": false
+      },
+      "CentOS 7.9 UEFI": {
+        "id": "img-6b8e445d-f7fe-45a9-8d20-71841143d6b7",
+        "uefi": true
+      },
+      "CentOS 8.2": {
+        "id": "img-540a77fe-40a2-4954-a185-edb6ccfeb2b0",
+        "uefi": false
+      },
+      "CentOS 8.5 UEFI": {
+        "id": "img-c401437e-dafd-4809-b9df-d6ec6884f4c6",
+        "uefi": true
+      },
+      "CentOS 8 Stream": {
+        "id": "img-9e153802-0c5f-4e6f-a5a1-9c9b47aa041d",
+        "uefi": false
+      },
+      "AlmaLinux 8.5": {
+        "id": "img-1f97a7a6-423c-4994-9788-5329af27da70",
+        "uefi": false
+      },
+      "AlmaLinux 9.0": {
+        "id": "img-e6365906-f4f7-42ec-995e-77274c8c2dca",
+        "uefi": false
+      },
+      "RockyOS 8.5": {
+        "id": "img-bd002a1f-8dda-4349-acdc-001f529a54f3",
+        "uefi": false
+      },
+      "RockyOS 8.8": {
+        "id": "img-e15071a6-6b5b-4846-81e3-251e3c622ba4",
+        "uefi": false
+      },
+      "RockyOS 9.3": {
+        "id": "img-c2491870-9508-4fd5-ad65-8f6e804a7131",
+        "uefi": false
+      },
+      "Rocky 10 UEFI": {
+        "id": "img-4e07efee-37f1-4a1f-a90d-59278e46bce6",
+        "uefi": true
+      }
+    },
+    "Windows": {
+      "Windows Server 2012 R2": {
+        "id": "img-7ba4e4d6-e98d-4700-b1ea-de74f9d0c0cf"
+      },
+      "Windows Server 2016": {
+        "id": "img-5b8e9fdb-9dd1-4458-a0cb-ebf31ab433c0"
+      },
+      "Windows Server 2019": {
+        "id": "img-d452cd41-9ee3-4e80-bdfb-f35a258e3c29"
+      },
+      "Windows Server 2022": {
+        "id": "img-7e0b5e4c-625a-4f8e-bbcf-0a4d08b155ff",
+        "recommended": true
+      },
+      "Windows Server 2025": {
+        "id": "img-36ca1d9f-64a4-4656-98af-dbeefd30fe52"
+      }
+    },
+    "OpenSUSE": {
+      "OpenSUSE 15.1": {
+        "id": "img-9a7c011a-f8fb-4916-8552-e284f1317372"
+      },
+      "OpenSUSE 15.2": {
+        "id": "img-c96910a3-b6e3-4a1d-8a8e-ec794f31cdc3"
+      },
+      "OpenSUSE 15.6": {
+        "id": "img-1d828028-a13a-4482-bd0c-c1b073157f36"
+      }
+    },
+    "OracleLinux": {
+      "OracleLinux 7.9": {
+        "id": "img-1aaecb2c-cb1c-41c7-a280-10a205a89504"
+      },
+      "OracleLinux 8.7": {
+        "id": "img-c036a232-2255-4335-a05d-033a40319f67"
+      },
+      "OracleLinux 9.1": {
+        "id": "img-2edf7b13-6d17-43ff-90e8-ddcfd3377691"
+      }
+    },
+    "Other": {
+      "Debian Netinst 3CX v18": {
+        "id": "img-4dda5eeb-694a-4ad8-8a9f-b3e24e32a867"
+      },
+      "AWS DataSync 2.0": {
+        "id": "img-ccc3b283-f5e0-4699-9608-9c6223842b91"
+      },
+      "Rocky 9.6 aarch64": {
+        "id": "img-91de5827-0f8f-401c-89b5-594e5c174ba5"
+      },
+      "Rocky 10.0 aarch64": {
+        "id": "img-f83c9e40-eb9d-4b19-b39b-89b9da36726b"
+      }
+    }
+  }
+}

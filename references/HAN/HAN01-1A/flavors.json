@@ -1,0 +1,532 @@
+{
+  "_meta": {
+    "region": "HAN",
+    "zone": "HAN01-1A",
+    "updated": "2026-05-25",
+    "s2_preferred": true
+  },
+  "flavors": {
+    "1vCPU-2GB": {
+      "id": "flav-2d337169-6881-4593-98cf-43fa16b3ad5f",
+      "cpu": 1,
+      "ram_gb": 2,
+      "network": "1Gbps",
+      "family": "general",
+      "internal_name": "s2-general-1x2"
+    },
+    "2vCPU-4GB": {
+      "id": "flav-f0dd1aab-d8d9-4f2b-944e-efab24246e6c",
+      "cpu": 2,
+      "ram_gb": 4,
+      "network": "1Gbps",
+      "family": "general",
+      "internal_name": "s2-general-2x4"
+    },
+    "4vCPU-8GB": {
+      "id": "flav-49d2a909-459a-4210-ae3c-248c01a9a82f",
+      "cpu": 4,
+      "ram_gb": 8,
+      "network": "1Gbps",
+      "family": "general",
+      "internal_name": "s2-general-4x8"
+    },
+    "8vCPU-16GB": {
+      "id": "flav-01fa8c69-4612-4ed2-9198-f4dddcf81775",
+      "cpu": 8,
+      "ram_gb": 16,
+      "network": "1Gbps",
+      "family": "general",
+      "internal_name": "s2-general-8x16"
+    },
+    "8vCPU-16GB-10G": {
+      "id": "flav-21b9c63d-05a6-4b35-8f12-a86ff54d7d9a",
+      "cpu": 8,
+      "ram_gb": 16,
+      "network": "10Gbps",
+      "family": "general",
+      "internal_name": "s2-general-8x16-n10"
+    },
+    "16vCPU-32GB": {
+      "id": "flav-5daf5a58-6856-440d-846e-2ca155ddc264",
+      "cpu": 16,
+      "ram_gb": 32,
+      "network": "1Gbps",
+      "family": "general",
+      "internal_name": "s2-general-16x32"
+    },
+    "16vCPU-32GB-10G": {
+      "id": "flav-58d6b04d-f4a5-496a-bbda-29196f5652c5",
+      "cpu": 16,
+      "ram_gb": 32,
+      "network": "10Gbps",
+      "family": "general",
+      "internal_name": "s2-general-16x32-n10"
+    },
+    "2vCPU-8GB": {
+      "id": "flav-cced973d-1d2f-40c1-8ac5-e76d48d1826f",
+      "cpu": 2,
+      "ram_gb": 8,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-2x8"
+    },
+    "4vCPU-16GB": {
+      "id": "flav-9a3e7e91-0cfd-489c-804d-31ea861f471b",
+      "cpu": 4,
+      "ram_gb": 16,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-4x16"
+    },
+    "8vCPU-32GB": {
+      "id": "flav-31a69686-13b0-4e31-9fdc-f6bc672752ca",
+      "cpu": 8,
+      "ram_gb": 32,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-8x32"
+    },
+    "8vCPU-32GB-10G": {
+      "id": "flav-be438a08-81fb-4c1e-8e3f-9bc76af67ca9",
+      "cpu": 8,
+      "ram_gb": 32,
+      "network": "10Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-8x32-n10"
+    },
+    "12vCPU-48GB": {
+      "id": "flav-90dbd854-ce39-48b3-9388-e6686267fd44",
+      "cpu": 12,
+      "ram_gb": 48,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-12x48"
+    },
+    "12vCPU-48GB-10G": {
+      "id": "flav-8542e5ae-91da-4475-81f0-f2cb46ca49fb",
+      "cpu": 12,
+      "ram_gb": 48,
+      "network": "10Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-12x48-n10"
+    },
+    "16vCPU-48GB": {
+      "id": "flav-2fe2e9bb-0c3c-48f3-b1d1-50b1c6d13402",
+      "cpu": 16,
+      "ram_gb": 48,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-16x48"
+    },
+    "16vCPU-64GB": {
+      "id": "flav-cdb76439-dc10-4b66-a41b-ad130653bdf0",
+      "cpu": 16,
+      "ram_gb": 64,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-16x64"
+    },
+    "16vCPU-64GB-10G": {
+      "id": "flav-5eeb56c3-d84b-463e-b206-d9c6b53e0e96",
+      "cpu": 16,
+      "ram_gb": 64,
+      "network": "10Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-16x64-n10"
+    },
+    "24vCPU-96GB": {
+      "id": "flav-85ab2dd2-5831-4020-80d1-77c2322e0c32",
+      "cpu": 24,
+      "ram_gb": 96,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-24x96"
+    },
+    "32vCPU-128GB": {
+      "id": "flav-beebd300-b60d-4551-9e4d-df58e8e6b05e",
+      "cpu": 32,
+      "ram_gb": 128,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-32x128"
+    },
+    "32vCPU-128GB-10G": {
+      "id": "flav-e04f140f-fdd2-4c99-b6ff-9bbdd37819ad",
+      "cpu": 32,
+      "ram_gb": 128,
+      "network": "10Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-32x128-n10"
+    },
+    "64vCPU-256GB-10G": {
+      "id": "flav-8975440b-a036-4169-8fc4-20fe3945fbe3",
+      "cpu": 64,
+      "ram_gb": 256,
+      "network": "10Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-64x256-n10"
+    },
+    "2vCPU-16GB": {
+      "id": "flav-5c1d7c7e-076c-4a18-850b-fd43a2841a3e",
+      "cpu": 2,
+      "ram_gb": 16,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-2x16"
+    },
+    "4vCPU-32GB": {
+      "id": "flav-84086a95-cf21-44af-9c99-8b4394fbc398",
+      "cpu": 4,
+      "ram_gb": 32,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-4x32"
+    },
+    "8vCPU-64GB": {
+      "id": "flav-425b2004-e98d-41ec-940f-0351ad630e20",
+      "cpu": 8,
+      "ram_gb": 64,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-8x64"
+    },
+    "16vCPU-96GB": {
+      "id": "flav-6ed8dec1-5ef9-4c42-b615-0235022452e5",
+      "cpu": 16,
+      "ram_gb": 96,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-16x96"
+    },
+    "16vCPU-128GB": {
+      "id": "flav-5fce7854-2b34-4969-9fcb-931b00667c6d",
+      "cpu": 16,
+      "ram_gb": 128,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-16x128"
+    },
+    "32vCPU-256GB": {
+      "id": "flav-25e358a2-8052-40a1-9294-f03470575286",
+      "cpu": 32,
+      "ram_gb": 256,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-32x256"
+    },
+    "2vCPU-2GB": {
+      "id": "flav-efcf99e3-4e2c-40a0-a661-f48f0dadb2b0",
+      "cpu": 2,
+      "ram_gb": 2,
+      "network": "1Gbps",
+      "family": "highcpu",
+      "internal_name": "s2-highcpu-2x2"
+    },
+    "4vCPU-4GB": {
+      "id": "flav-71c882c0-0948-4d29-9c9e-09a512ab21cc",
+      "cpu": 4,
+      "ram_gb": 4,
+      "network": "1Gbps",
+      "family": "highcpu",
+      "internal_name": "s2-highcpu-4x4"
+    },
+    "8vCPU-8GB": {
+      "id": "flav-5154e9e8-c72f-46fe-82c7-bc736300566c",
+      "cpu": 8,
+      "ram_gb": 8,
+      "network": "1Gbps",
+      "family": "highcpu",
+      "internal_name": "s2-highcpu-8x8"
+    },
+    "S2-GENERAL-1vCPU-2GB": {
+      "id": "flav-2d337169-6881-4593-98cf-43fa16b3ad5f",
+      "cpu": 1,
+      "ram_gb": 2,
+      "network": "1Gbps",
+      "family": "general",
+      "internal_name": "s2-general-1x2",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-GENERAL-2vCPU-4GB": {
+      "id": "flav-f0dd1aab-d8d9-4f2b-944e-efab24246e6c",
+      "cpu": 2,
+      "ram_gb": 4,
+      "network": "1Gbps",
+      "family": "general",
+      "internal_name": "s2-general-2x4",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-GENERAL-4vCPU-8GB": {
+      "id": "flav-49d2a909-459a-4210-ae3c-248c01a9a82f",
+      "cpu": 4,
+      "ram_gb": 8,
+      "network": "1Gbps",
+      "family": "general",
+      "internal_name": "s2-general-4x8",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-GENERAL-8vCPU-16GB": {
+      "id": "flav-01fa8c69-4612-4ed2-9198-f4dddcf81775",
+      "cpu": 8,
+      "ram_gb": 16,
+      "network": "1Gbps",
+      "family": "general",
+      "internal_name": "s2-general-8x16",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-GENERAL-8vCPU-16GB-10G": {
+      "id": "flav-21b9c63d-05a6-4b35-8f12-a86ff54d7d9a",
+      "cpu": 8,
+      "ram_gb": 16,
+      "network": "10Gbps",
+      "family": "general",
+      "internal_name": "s2-general-8x16-n10",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-GENERAL-16vCPU-32GB": {
+      "id": "flav-5daf5a58-6856-440d-846e-2ca155ddc264",
+      "cpu": 16,
+      "ram_gb": 32,
+      "network": "1Gbps",
+      "family": "general",
+      "internal_name": "s2-general-16x32",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-GENERAL-16vCPU-32GB-10G": {
+      "id": "flav-58d6b04d-f4a5-496a-bbda-29196f5652c5",
+      "cpu": 16,
+      "ram_gb": 32,
+      "network": "10Gbps",
+      "family": "general",
+      "internal_name": "s2-general-16x32-n10",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-2vCPU-8GB": {
+      "id": "flav-cced973d-1d2f-40c1-8ac5-e76d48d1826f",
+      "cpu": 2,
+      "ram_gb": 8,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-2x8",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-4vCPU-16GB": {
+      "id": "flav-9a3e7e91-0cfd-489c-804d-31ea861f471b",
+      "cpu": 4,
+      "ram_gb": 16,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-4x16",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-8vCPU-32GB": {
+      "id": "flav-31a69686-13b0-4e31-9fdc-f6bc672752ca",
+      "cpu": 8,
+      "ram_gb": 32,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-8x32",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-8vCPU-32GB-10G": {
+      "id": "flav-be438a08-81fb-4c1e-8e3f-9bc76af67ca9",
+      "cpu": 8,
+      "ram_gb": 32,
+      "network": "10Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-8x32-n10",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-12vCPU-48GB": {
+      "id": "flav-90dbd854-ce39-48b3-9388-e6686267fd44",
+      "cpu": 12,
+      "ram_gb": 48,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-12x48",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-12vCPU-48GB-10G": {
+      "id": "flav-8542e5ae-91da-4475-81f0-f2cb46ca49fb",
+      "cpu": 12,
+      "ram_gb": 48,
+      "network": "10Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-12x48-n10",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-16vCPU-48GB": {
+      "id": "flav-2fe2e9bb-0c3c-48f3-b1d1-50b1c6d13402",
+      "cpu": 16,
+      "ram_gb": 48,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-16x48",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-16vCPU-64GB": {
+      "id": "flav-cdb76439-dc10-4b66-a41b-ad130653bdf0",
+      "cpu": 16,
+      "ram_gb": 64,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-16x64",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-16vCPU-64GB-10G": {
+      "id": "flav-5eeb56c3-d84b-463e-b206-d9c6b53e0e96",
+      "cpu": 16,
+      "ram_gb": 64,
+      "network": "10Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-16x64-n10",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-24vCPU-96GB": {
+      "id": "flav-85ab2dd2-5831-4020-80d1-77c2322e0c32",
+      "cpu": 24,
+      "ram_gb": 96,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-24x96",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-32vCPU-128GB": {
+      "id": "flav-beebd300-b60d-4551-9e4d-df58e8e6b05e",
+      "cpu": 32,
+      "ram_gb": 128,
+      "network": "1Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-32x128",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-32vCPU-128GB-10G": {
+      "id": "flav-e04f140f-fdd2-4c99-b6ff-9bbdd37819ad",
+      "cpu": 32,
+      "ram_gb": 128,
+      "network": "10Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-32x128-n10",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-STANDARD-64vCPU-256GB-10G": {
+      "id": "flav-8975440b-a036-4169-8fc4-20fe3945fbe3",
+      "cpu": 64,
+      "ram_gb": 256,
+      "network": "10Gbps",
+      "family": "standard",
+      "internal_name": "s2-standard-64x256-n10",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-HIGHMEM-2vCPU-16GB": {
+      "id": "flav-5c1d7c7e-076c-4a18-850b-fd43a2841a3e",
+      "cpu": 2,
+      "ram_gb": 16,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-2x16",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-HIGHMEM-4vCPU-32GB": {
+      "id": "flav-84086a95-cf21-44af-9c99-8b4394fbc398",
+      "cpu": 4,
+      "ram_gb": 32,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-4x32",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-HIGHMEM-8vCPU-64GB": {
+      "id": "flav-425b2004-e98d-41ec-940f-0351ad630e20",
+      "cpu": 8,
+      "ram_gb": 64,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-8x64",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-HIGHMEM-16vCPU-96GB": {
+      "id": "flav-6ed8dec1-5ef9-4c42-b615-0235022452e5",
+      "cpu": 16,
+      "ram_gb": 96,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-16x96",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-HIGHMEM-16vCPU-128GB": {
+      "id": "flav-5fce7854-2b34-4969-9fcb-931b00667c6d",
+      "cpu": 16,
+      "ram_gb": 128,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-16x128",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-HIGHMEM-32vCPU-256GB": {
+      "id": "flav-25e358a2-8052-40a1-9294-f03470575286",
+      "cpu": 32,
+      "ram_gb": 256,
+      "network": "1Gbps",
+      "family": "highmem",
+      "internal_name": "s2-highmem-32x256",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-HIGHCPU-2vCPU-2GB": {
+      "id": "flav-efcf99e3-4e2c-40a0-a661-f48f0dadb2b0",
+      "cpu": 2,
+      "ram_gb": 2,
+      "network": "1Gbps",
+      "family": "highcpu",
+      "internal_name": "s2-highcpu-2x2",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-HIGHCPU-4vCPU-4GB": {
+      "id": "flav-71c882c0-0948-4d29-9c9e-09a512ab21cc",
+      "cpu": 4,
+      "ram_gb": 4,
+      "network": "1Gbps",
+      "family": "highcpu",
+      "internal_name": "s2-highcpu-4x4",
+      "generation": "s2",
+      "preferred": true
+    },
+    "S2-HIGHCPU-8vCPU-8GB": {
+      "id": "flav-5154e9e8-c72f-46fe-82c7-bc736300566c",
+      "cpu": 8,
+      "ram_gb": 8,
+      "network": "1Gbps",
+      "family": "highcpu",
+      "internal_name": "s2-highcpu-8x8",
+      "generation": "s2",
+      "preferred": true
+    }
+  }
+}

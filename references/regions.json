@@ -1,0 +1,19 @@
+{
+  "HCM": {
+    "console_base": "https://hcm-3.console.vngcloud.vn",
+    "api_base": "https://hcm-3.api.vngcloud.vn",
+    "zones": {
+      "HCM03-1A": { "zone_uuid": "C0A35725-D807-4F38-AD05-4A1CDEB976F5" },
+      "HCM03-1B": { "zone_uuid": "C0A35725-D807-4F38-AD05-4A1CDEB976F5" },
+      "HCM03-1C": { "zone_uuid": "C0A35725-D807-4F38-AD05-4A1CDEB976F5" }
+    }
+  },
+  "HAN": {
+    "console_base": "https://han-1.console.vngcloud.vn",
+    "api_base": "https://han-1.api.vngcloud.vn",
+    "zones": {
+      "HAN01-1A": { "zone_uuid": "" },
+      "HAN01-1B": { "zone_uuid": "" }
+    }
+  }
+}

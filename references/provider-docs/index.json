@@ -1,0 +1,275 @@
+{
+  "resources": {
+    "vdb_memstore_backup": {
+      "file": "resources/vdb_memstore_backup.md",
+      "subcategory": "vDB",
+      "resource": "vngcloud_vdb_memstore_backup",
+      "description": "Provides a VNG Cloud vDB Memory store Backup. This can be used to import, create, and delete."
+    },
+    "vdb_memstore_backup_storage": {
+      "file": "resources/vdb_memstore_backup_storage.md",
+      "subcategory": "vDB",
+      "resource": "vngcloud_vdb_memstore_backup_storage",
+      "description": "Provides a VNG Cloud vDB Memory store Backup storage. This can be used to import, create, modify, and delete."
+    },
+    "vdb_memstore_config_group": {
+      "file": "resources/vdb_memstore_config_group.md",
+      "subcategory": "vDB",
+      "resource": "vngcloud_vdb_memstore_config_group",
+      "description": "Provides a VNG Cloud vDB Memory store Configuration group. This can be used to import, create, modify, and delete."
+    },
+    "vdb_memstore_database": {
+      "file": "resources/vdb_memstore_database.md",
+      "subcategory": "vDB",
+      "resource": "vngcloud_vdb_memstore_database",
+      "description": "Provides a VNG Cloud vDB Memory store Database. This can be used to import, create, modify, and delete."
+    },
+    "vdb_relational_backup": {
+      "file": "resources/vdb_relational_backup.md",
+      "subcategory": "vDB",
+      "resource": "vngcloud_vdb_relational_backup",
+      "description": "Provides a VNG Cloud vDB Relational Backup. This can be used to import, create, modify, and delete."
+    },
+    "vdb_relational_backup_storage": {
+      "file": "resources/vdb_relational_backup_storage.md",
+      "subcategory": "vDB",
+      "resource": "vngcloud_vdb_relational_backup_storage",
+      "description": "Provides a VNG Cloud vDB Relational Backup storage. This can be used to import, create, modify, and delete."
+    },
+    "vdb_relational_config_group": {
+      "file": "resources/vdb_relational_config_group.md",
+      "subcategory": "vDB",
+      "resource": "vngcloud_vdb_relational_config_group",
+      "description": "Provides a VNG Cloud vDB Relational Configuration group. This can be used to import, create, modify, and delete."
+    },
+    "vdb_relational_database": {
+      "file": "resources/vdb_relational_database.md",
+      "subcategory": "vDB",
+      "resource": "vngcloud_vdb_relational_database",
+      "description": "Provides a VNG Cloud vDB Relational Database. This can be used to import, create, modify, and delete."
+    },
+    "vks_cluster": {
+      "file": "resources/vks_cluster.md",
+      "subcategory": "Kubernetes Service",
+      "resource": "vngcloud_vks_cluster",
+      "description": "Creates a Cluster on VNGCloud Kubernetes Service (VKS)."
+    },
+    "vks_cluster_node_group": {
+      "file": "resources/vks_cluster_node_group.md",
+      "subcategory": "Kubernetes Service",
+      "resource": "vngcloud_vks_cluster_node_group",
+      "description": "Manages a VKS NodeGroup resource."
+    },
+    "vlb_loadbalancer": {
+      "file": "resources/vlb_loadbalancer.md",
+      "subcategory": "vLoadBalancer",
+      "resource": "vngcloud_vlb_load_balancer",
+      "description": "Provides a VNG Cloud VLB resource. This can be used to import, create, modify, resize, and delete."
+    },
+    "vlb_loadbalancer_certificate": {
+      "file": "resources/vlb_loadbalancer_certificate.md",
+      "subcategory": "vLoadBalancer",
+      "resource": "vngcloud_vlb_certificate",
+      "description": "ResourceCA is a Terraform resource that represents a certificate authority (CA). It can be used to import, and delete CAs in a target system."
+    },
+    "vlb_loadbalancer_listener": {
+      "file": "resources/vlb_loadbalancer_listener.md",
+      "subcategory": "vLoadBalancer",
+      "resource": "vngcloud_vlb_listener",
+      "description": "Provides a Load Balancer Listener resource. This can be used to import, create, modify, and delete."
+    },
+    "vlb_loadbalancer_policy": {
+      "file": "resources/vlb_loadbalancer_policy.md",
+      "subcategory": "vLoadBalancer",
+      "resource": "vngcloud_vlb_l7policy",
+      "description": "Provides a load balancer policy, which can be attached to an LB listener. This can be used to import, create, modify, and delete."
+    },
+    "vlb_loadbalancer_pool": {
+      "file": "resources/vlb_loadbalancer_pool.md",
+      "subcategory": "vLoadBalancer",
+      "resource": "vngcloud_vlb_pool",
+      "description": "Provides a Pool resource for use with Load Balancer resources. This can be used to import, create, modify, and delete."
+    },
+    "vserver_address_pair_interface_attachment": {
+      "file": "resources/vserver_address_pair_interface_attachment.md",
+      "subcategory": "VPC (Virtual Private Cloud)",
+      "resource": "vngcloud_vserver_address_pair_interface_attachment",
+      "description": "Provides a VNG Cloud VServer Address Pair Interface Attachment resource."
+    },
+    "vserver_attach_lb": {
+      "file": "resources/vserver_attach_lb.md",
+      "subcategory": "vContainer",
+      "resource": "vngcloud_vserver_attach_lb_to_cluster",
+      "description": "Provides a VNG Cloud VServer Attach Load Balancer To Cluster resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_change_cluster_sec_group": {
+      "file": "resources/vserver_change_cluster_sec_group.md",
+      "subcategory": "vContainer",
+      "resource": "vngcloud_vserver_change_cluster_sec_group",
+      "description": "Provides a VNG Cloud VServer Change Cluster Sec Group resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_cluster_node_group": {
+      "file": "resources/vserver_cluster_node_group.md",
+      "subcategory": "vContainer",
+      "resource": "vngcloud_vserver_cluster_node_group",
+      "description": "Provides a VNG Cloud VServer Cluster Node Group resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_external_interface_attach": {
+      "file": "resources/vserver_external_interface_attach.md",
+      "subcategory": "vServer",
+      "resource": "vngcloud_vserver_external_interface_attach",
+      "description": "Provides a VNG Cloud VServer Attach External Interface to server. This can be used to create and delete."
+    },
+    "vserver_internal_interface_attach": {
+      "file": "resources/vserver_internal_interface_attach.md",
+      "subcategory": "vServer",
+      "resource": "vngcloud_vserver_internal_interface_attach",
+      "description": "Provides a VNG Cloud VServer Attach Internal Interface to Server. This can be used to attach and detach."
+    },
+    "vserver_k8s": {
+      "file": "resources/vserver_k8s.md",
+      "subcategory": "vContainer",
+      "resource": "vngcloud_vserver_k8s",
+      "description": "Provides a VNG Cloud VServer Kubernetes resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_network": {
+      "file": "resources/vserver_network.md",
+      "subcategory": "VPC (Virtual Private Cloud)",
+      "resource": "vngcloud_vserver_network",
+      "description": "Provides a VNG Cloud VServer Network resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_network_interface": {
+      "file": "resources/vserver_network_interface.md",
+      "subcategory": "VPC (Virtual Private Cloud)",
+      "resource": "vngcloud_vserver_network_interface",
+      "description": "Provides a VNG Cloud VServer Network Interface resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_route_table": {
+      "file": "resources/vserver_route_table.md",
+      "subcategory": "VPC (Virtual Private Cloud)",
+      "resource": "vngcloud_vserver_route_table",
+      "description": "Provides a VNG Cloud VServer Route Table resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_secgroup": {
+      "file": "resources/vserver_secgroup.md",
+      "subcategory": "VPC (Virtual Private Cloud)",
+      "resource": "vngcloud_vserver_secgroup",
+      "description": "Provides a VNG Cloud VServer Security Group resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_secgrouprule": {
+      "file": "resources/vserver_secgrouprule.md",
+      "subcategory": "VPC (Virtual Private Cloud)",
+      "resource": "vngcloud_vserver_secgrouprule",
+      "description": "Provides a VNG Cloud VServer Security Group Rule resource. This can be used to import, create, and delete."
+    },
+    "vserver_server": {
+      "file": "resources/vserver_server.md",
+      "subcategory": "vServer",
+      "resource": "vngcloud_vserver_server",
+      "description": "Provides a VNG Cloud VServer Server resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_server_group": {
+      "file": "resources/vserver_server_group.md",
+      "subcategory": "vServer",
+      "resource": "vngcloud_vserver_server_group",
+      "description": "Provides a VNG Cloud VServer Server Group resource. This can be used to import create, modify, and delete."
+    },
+    "vserver_sshkey": {
+      "file": "resources/vserver_sshkey.md",
+      "subcategory": "vServer",
+      "resource": "vngcloud_vserver_sshkey",
+      "description": "Provides a VNG Cloud VServer SSH Key resource. This can be used to import, create, and delete."
+    },
+    "vserver_subnet": {
+      "file": "resources/vserver_subnet.md",
+      "subcategory": "VPC (Virtual Private Cloud)",
+      "resource": "vngcloud_vserver_subnet",
+      "description": "Provides a VNG Cloud VServer Subnet resource. This can be used to import, create, and delete."
+    },
+    "vserver_vip": {
+      "file": "resources/vserver_vip.md",
+      "subcategory": "VPC (Virtual Private Cloud)",
+      "resource": "vngcloud_vserver_vip",
+      "description": "Provides a VNG Cloud VServer Virtual Ip Address resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_volume": {
+      "file": "resources/vserver_volume.md",
+      "subcategory": "Block Store",
+      "resource": "vngcloud_vserver_volume",
+      "description": "Provides a VNG Cloud VServer Volume resource. This can be used to import, create, modify, and delete."
+    },
+    "vserver_volume_attach": {
+      "file": "resources/vserver_volume_attach.md",
+      "subcategory": "vServer",
+      "resource": "vngcloud_vserver_volume_attach",
+      "description": "Provides a VNG Cloud VServer Acttach volume to server. This can be used to create and delete."
+    }
+  },
+  "data_sources": {
+    "vdb_backup_storage_package": {
+      "file": "data-sources/vdb_backup_storage_package.md",
+      "subcategory": "vDB",
+      "datasource": "vngcloud_vdb_backup_storage_package"
+    },
+    "vdb_database_package": {
+      "file": "data-sources/vdb_database_package.md",
+      "subcategory": "vDB",
+      "datasource": "vngcloud_vdb_database_package"
+    },
+    "vdb_database_volume_type": {
+      "file": "data-sources/vdb_database_volume_type.md",
+      "subcategory": "vDB",
+      "datasource": "vngcloud_vdb_database_volume_type"
+    },
+    "vlb_lb_packages": {
+      "file": "data-sources/vlb_lb_packages.md",
+      "subcategory": "vLoadBalancer",
+      "datasource": "vngcloud_vlb_lb_packages"
+    },
+    "vserver_flavor": {
+      "file": "data-sources/vserver_flavor.md",
+      "subcategory": "vServer",
+      "datasource": "vngcloud_vserver_flavor"
+    },
+    "vserver_flavor_zone": {
+      "file": "data-sources/vserver_flavor_zone.md",
+      "subcategory": "vServer",
+      "datasource": "vngcloud_vserver_flavor_zone"
+    },
+    "vserver_image": {
+      "file": "data-sources/vserver_image.md",
+      "subcategory": "vServer",
+      "datasource": "vngcloud_vserver_image"
+    },
+    "vserver_k8s_network_type": {
+      "file": "data-sources/vserver_k8s_network_type.md",
+      "subcategory": "vContainer",
+      "datasource": "vngcloud_vserver_flavor"
+    },
+    "vserver_k8s_version": {
+      "file": "data-sources/vserver_k8s_version.md",
+      "subcategory": "vContainer",
+      "datasource": "vngcloud_vserver_flavor"
+    },
+    "vserver_project": {
+      "file": "data-sources/vserver_project.md",
+      "subcategory": "Common",
+      "datasource": "vngcloud_vserver_project"
+    },
+    "vserver_server_group_policy": {
+      "file": "data-sources/vserver_server_group_policy.md",
+      "subcategory": "vServer",
+      "datasource": "vngcloud_vserver_server_group_policy"
+    },
+    "vserver_volume_type": {
+      "file": "data-sources/vserver_volume_type.md",
+      "subcategory": "Block Store",
+      "datasource": "vngcloud_vserver_volume_type"
+    },
+    "vserver_volume_type_zone": {
+      "file": "data-sources/vserver_volume_type_zone.md",
+      "subcategory": "Block Store",
+      "datasource": "vngcloud_vserver_volume_type_zone"
+    }
+  }
+}
