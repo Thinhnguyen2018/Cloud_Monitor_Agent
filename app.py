@@ -2408,10 +2408,49 @@ def debug_images():
         uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
         s, d = gn_api(token, uid, "GET", f"v2/{project_id}/images")
         images = d.get("listData", []) if s == 200 else []
-        # Return first 3 images with ALL fields so we can see which holds the UUID
         return jsonify({"status": s, "sample": images[:3], "total": len(images)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/debug/subnets", methods=["POST"])
+@admin_required
+def debug_subnets():
+    """Dump raw subnet/network responses to identify correct field names."""
+    body          = request.get_json() or {}
+    client_id     = body.get("clientId", "")
+    client_secret = body.get("clientSecret", "")
+    project_id    = body.get("projectId", "")
+    if not client_id or not project_id:
+        return jsonify({"error": "clientId and projectId required"}), 400
+    try:
+        token, user_info = fetch_gn_token(client_id, client_secret)
+        uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
+        P = project_id
+        result = {}
+
+        # Try /subnets
+        s1, d1 = gn_api(token, uid, "GET", f"v2/{P}/subnets")
+        result["subnets_endpoint"] = {"status": s1, "type": type(d1).__name__,
+                                       "raw": d1 if not isinstance(d1, list) else d1[:2],
+                                       "list_sample": d1[:2] if isinstance(d1, list) else []}
+
+        # Try /networks
+        s2, d2 = gn_api(token, uid, "GET", f"v2/{P}/networks")
+        networks = d2.get("listData", d2) if isinstance(d2, dict) else d2
+        result["networks_endpoint"] = {"status": s2, "sample": networks[:2] if isinstance(networks, list) else d2}
+
+        # Try /networks/{id}/subnets for first network
+        if isinstance(networks, list) and networks:
+            nid = networks[0].get("id") or networks[0].get("uuid","")
+            s3, d3 = gn_api(token, uid, "GET", f"v2/{P}/networks/{nid}/subnets")
+            result[f"networks_{nid}_subnets"] = {"status": s3, "type": type(d3).__name__,
+                                                   "raw": d3 if not isinstance(d3, list) else d3[:2]}
+
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=False)
