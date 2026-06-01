@@ -888,13 +888,16 @@ def resolve_vm_create_params(message, flavors, images, subnets, networks, sshkey
         return None, f"Còn thiếu: {', '.join(missing)}."
 
     # Resolve imageId — must be a UUID, not an OS-name string
+    # Log ALL fields so we can identify the correct key from GreenNode API
+    print(f"[IMAGE_DEBUG] matched image keys={list(image.keys())} values={dict(image)}")
     _raw_iid = (image.get("uuid") or image.get("imageUuid") or
-                image.get("id") or image.get("imageId") or "")
+                image.get("imageId") or image.get("id") or "")
     # Validate: accept 36-char UUID or img- prefixed IDs; reject plain words like "Ubuntu"
     _image_id = _raw_iid if re.match(r'^[0-9a-fA-F\-]{36}$|^img-', str(_raw_iid)) else None
     if not _image_id:
+        print(f"[IMAGE_DEBUG] FAIL — no UUID field found. Full object: {dict(image)}")
         return None, (f"Không tìm được UUID của image '{image.get('name', '?')}'. "
-                      f"Các field có sẵn: {list(image.keys())}")
+                      f"Các field: {dict(image)}")
 
     return {
         "name":           vm_name,
