@@ -2207,5 +2207,26 @@ def index():
 def health():
     return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()})
 
+
+@app.route("/api/debug/images", methods=["POST"])
+@admin_required
+def debug_images():
+    """Dump raw image objects so we can identify the correct UUID field name."""
+    body          = request.get_json() or {}
+    client_id     = body.get("clientId", "")
+    client_secret = body.get("clientSecret", "")
+    project_id    = body.get("projectId", "")
+    if not client_id or not project_id:
+        return jsonify({"error": "clientId and projectId required"}), 400
+    try:
+        token, user_info = fetch_gn_token(client_id, client_secret)
+        uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
+        s, d = gn_api(token, uid, "GET", f"v2/{project_id}/images")
+        images = d.get("listData", []) if s == 200 else []
+        # Return first 3 images with ALL fields so we can see which holds the UUID
+        return jsonify({"status": s, "sample": images[:3], "total": len(images)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=False)
