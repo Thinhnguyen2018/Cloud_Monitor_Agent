@@ -758,6 +758,139 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
     return (None, None, None)
 
 
+def resolve_vm_create_params(message, flavors, images, subnets, networks, sshkeys, vol_types):
+    """
+    Parse a free-text VM creation request and resolve human-readable names → real IDs.
+    Returns (params_dict, None) on success, or (None, error_message) when info is missing.
+    """
+    msg = message.lower()
+
+    # ── VM name ───────────────────────────────────────────────────────────────
+    name_m = re.search(r'(?:tên|name)[:\s]+([^\s,;|]+)', message, re.IGNORECASE)
+    vm_name = name_m.group(1) if name_m else None
+    if not vm_name:
+        # Fallback: first token that looks like a hostname
+        for w in message.split():
+            if re.match(r'^[a-zA-Z][a-zA-Z0-9\-_.]{1,}$', w) and w.lower() not in (
+                    "tạo","tên","vm","server","máy","flavor","os","ubuntu","centos",
+                    "windows","debian","rocky","subnet","network","ssh","key","disk","floating"):
+                vm_name = w
+                break
+
+    # ── Flavor — match by vCPU+RAM spec or by name ───────────────────────────
+    flavor = None
+    cpu_m = re.search(r'(\d+)\s*(?:vcpu|cpu|core)', msg)
+    # RAM: "8gb" but NOT "40gb disk / 40gb root"
+    ram_m = re.search(r'(\d+)\s*gb(?!\s*(?:disk|root|ssd|hdd|ổ))', msg)
+    if cpu_m or ram_m:
+        want_cpu    = int(cpu_m.group(1)) if cpu_m else None
+        want_ram_mb = int(ram_m.group(1)) * 1024 if ram_m else None
+        for f in flavors:
+            f_cpu = int(f.get("vcpus") or f.get("cpu") or 0)
+            f_ram = int(f.get("ram") or 0)
+            cpu_ok = (want_cpu is None)    or f_cpu == want_cpu
+            ram_ok = (want_ram_mb is None) or abs(f_ram - want_ram_mb) < 512
+            if cpu_ok and ram_ok:
+                flavor = f
+                break
+    if not flavor:
+        for f in flavors:
+            if (f.get("name") or "").lower() in msg:
+                flavor = f
+                break
+
+    # ── Image — match by OS name + version ───────────────────────────────────
+    image = None
+    OS_PATTERNS = [
+        ("ubuntu", r'ubuntu[\s\-]*([\d.]+)?'),
+        ("centos", r'centos[\s\-]*([\d.]+)?'),
+        ("windows", r'windows[\s\-]*([\d.]+)?'),
+        ("debian", r'debian[\s\-]*([\d.]+)?'),
+        ("rocky",  r'rocky[\s\-]*([\d.]+)?'),
+        ("almalinux", r'alma[\s\-]*([\d.]+)?'),
+    ]
+    for os_kw, pat in OS_PATTERNS:
+        if os_kw in msg:
+            ver_m   = re.search(pat, msg)
+            version = ver_m.group(1).strip() if ver_m and ver_m.group(1) else None
+            for i in images:
+                iname = (i.get("name") or "").lower()
+                if os_kw in iname and (not version or version in iname):
+                    image = i
+                    break
+            if image:
+                break
+    if not image:
+        # Generic: match any image whose name words appear in message
+        for i in images:
+            iname = (i.get("name") or "").lower()
+            words = [w for w in re.split(r'[\s\-_.]', iname) if len(w) > 3]
+            if words and all(w in msg for w in words[:2]):
+                image = i
+                break
+
+    # ── Subnet — match by name, fallback to first ────────────────────────────
+    subnet = None
+    for s in subnets:
+        if (s.get("name") or "").lower() in msg:
+            subnet = s
+            break
+    if not subnet and subnets:
+        subnet = subnets[0]
+
+    # ── Network from subnet ───────────────────────────────────────────────────
+    network = None
+    if subnet:
+        net_id = subnet.get("networkId") or subnet.get("networkUuid")
+        network = next((n for n in networks if n.get("uuid") == net_id or n.get("id") == net_id), None)
+
+    # ── SSH key ───────────────────────────────────────────────────────────────
+    sshkey = None
+    for k in sshkeys:
+        if (k.get("name") or "").lower() in msg:
+            sshkey = k
+            break
+
+    # ── Root disk size ────────────────────────────────────────────────────────
+    disk_m = re.search(r'(?:disk|root|ổ\s*cứng)[^\d]*(\d+)\s*gb', msg)
+    if not disk_m:
+        disk_m = re.search(r'(\d+)\s*gb[^\w]*(?:disk|root|ổ)', msg)
+    root_disk = int(disk_m.group(1)) if disk_m else 40
+
+    # ── Volume type (default first) ───────────────────────────────────────────
+    vol_type = vol_types[0] if vol_types else {}
+
+    # ── Floating IP ───────────────────────────────────────────────────────────
+    want_fip = (any(w in msg for w in ["floating", "wan", "public ip", "ip công cộng"])
+                and "không" not in msg)
+
+    # ── Validation ───────────────────────────────────────────────────────────
+    missing = []
+    if not vm_name:  missing.append("**tên VM**")
+    if not flavor:   missing.append(f"**flavor** (ví dụ: 2 vCPU 4GB)")
+    if not image:    missing.append("**hệ điều hành** (Ubuntu 22.04, CentOS 7…)")
+    if not subnet:   missing.append("**subnet / network**")
+    if missing:
+        return None, f"Còn thiếu: {', '.join(missing)}."
+
+    return {
+        "name":           vm_name,
+        "flavorId":       flavor.get("id") or flavor.get("flavorId"),
+        "flavorName":     flavor.get("name"),
+        "imageId":        image.get("id") or image.get("imageId"),
+        "imageName":      image.get("name"),
+        "networkId":      (subnet.get("networkId") or subnet.get("networkUuid")
+                           or (network.get("uuid") if network else "")),
+        "subnetId":       subnet.get("id") or subnet.get("uuid"),
+        "subnetName":     subnet.get("name"),
+        "rootDiskSize":   root_disk,
+        "rootDiskTypeId": vol_type.get("id") or vol_type.get("uuid"),
+        "sshKeyId":       (sshkey.get("id") or sshkey.get("uuid")) if sshkey else None,
+        "secgroupIds":    [],
+        "attachFloating": want_fip,
+    }, None
+
+
 def execute_vm_action(token, uid, project_id, action_type, params):
     """Execute start/stop/reboot — return immediately, GreenNode processes async."""
     P         = project_id
@@ -999,8 +1132,44 @@ Nếu user vừa stop/start/reboot VM và hỏi lại trạng thái ngay:
 DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn."""
 
     # 3. Detect action intent — execute DIRECTLY without asking LLM
-    confirmed = body.get("confirmed", False)  # user already confirmed this action
-    pending_action = body.get("pendingAction", None)  # {type, params, desc} from previous turn
+    confirmed      = body.get("confirmed", False)
+    pending_action = body.get("pendingAction", None)
+
+    # ── Early VM-create resolution (server-side, bypasses LLM) ───────────────
+    # Fires when message looks like a VM spec (has OS + flavor/cpu/gb clues)
+    _msg_lo = user_message.lower()
+    _has_os     = any(w in _msg_lo for w in ["ubuntu","centos","windows","debian","rocky","alma"])
+    _has_size   = bool(re.search(r'\d+\s*(?:vcpu|cpu|core|\d+\s*gb)', _msg_lo))
+    _has_name   = bool(re.search(r'(?:tên|name)[:\s]+\S', user_message, re.IGNORECASE)
+                       or re.search(r'\b[a-z][a-z0-9\-]{2,}\b', _msg_lo))
+    if _has_os and (_has_size or _has_name) and not confirmed:
+        _params, _err = resolve_vm_create_params(
+            user_message, flavors, images, subnets, networks, sshkeys, vol_types)
+        if _params:
+            # All IDs resolved — go straight to confirm screen
+            _desc = f"Tạo VM **{_params['name']}** — {_params['flavorName']} · {_params['imageName']}"
+            ssh_name    = next((k.get("name","?") for k in sshkeys
+                                if k.get("id") == _params.get("sshKeyId")
+                                or k.get("uuid") == _params.get("sshKeyId")), "_(không có)_")
+            subnet_name = _params.get("subnetName", _params.get("subnetId","?"))
+            spec = (
+                f"🖥️ **Xác nhận tạo VM mới**\n\n"
+                f"| Thông số | Giá trị |\n|---|---|\n"
+                f"| Tên | **{_params['name']}** |\n"
+                f"| Flavor | {_params['flavorName']} (`{_params['flavorId']}`) |\n"
+                f"| OS / Image | {_params['imageName']} |\n"
+                f"| Subnet | {subnet_name} |\n"
+                f"| Root disk | {_params['rootDiskSize']} GB |\n"
+                f"| SSH Key | {ssh_name} |\n"
+                f"| Floating IP | {'Có' if _params.get('attachFloating') else 'Không'} |\n\n"
+                f"⚠️ VM sẽ được tạo và **tính phí ngay lập tức**. Xác nhận?"
+            )
+            return jsonify({
+                "reply":         spec,
+                "fetchedAt":     now,
+                "needConfirm":   True,
+                "pendingAction": {"type": "vm_create", "params": _params, "desc": _desc},
+            })
 
     if confirmed and pending_action:
         # User confirmed → execute the action NOW

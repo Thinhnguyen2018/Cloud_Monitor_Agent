@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem -Force)",
-      "Bash(Select-Object Name, FullName)"
+      "Bash(Select-Object Name, FullName)",
+      "Read(//c/Users/LAP13297/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/35b6f150-1476-4fca-9175-10209c591a53/fa70db7a-cfc9-4e59-b1be-44bcc8de542c/skills/xlsx/**)",
+      "Bash(extract-text \"C:\\\\Users\\\\LAP13297\\\\Downloads\\\\GreenNode_Feature_Tracker.xlsx\")",
+      "Bash(python3 -c ' *)"
     ]
   }
 }
