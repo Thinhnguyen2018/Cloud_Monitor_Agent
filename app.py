@@ -755,6 +755,10 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
     if any(w in msg for w in ["liệt kê flavor", "xem flavor", "danh sách flavor", "flavor nào", "list flavor", "các flavor"]):
         return ("list_flavors", {}, "Danh sách flavor khả dụng")
 
+    # ── List images ───────────────────────────────────────────────────────────
+    if any(w in msg for w in ["liệt kê image", "xem image", "danh sách image", "image nào", "list image", "các image", "os nào", "hệ điều hành nào"]):
+        return ("list_images", {}, "Danh sách image khả dụng")
+
     return (None, None, None)
 
 
@@ -1120,6 +1124,9 @@ HƯỚNG DẪN TRẢ LỜI:
   - Với vm_create: thêm trường "flavorName" và "imageName" để hiển thị confirm rõ ràng
   - Nếu thiếu thông tin quan trọng (tên VM, OS), hỏi lại user thay vì đoán
   - Nếu user chỉ nói "tạo VM" mà không có chi tiết, hỏi: tên VM, OS muốn dùng, cấu hình (flavor)
+  - ⛔ TUYỆT ĐỐI KHÔNG được bịa đặt hoặc tự suy luận ID (flav-xxx, img-xxx, vtype-xxx...)
+  - ⛔ Nếu context KHÔNG có dữ liệu FLAVOR/IMAGE/SUBNET, hãy nói thẳng: "Hệ thống chưa lấy được danh sách flavor/image. Bạn hãy hỏi **liệt kê flavor** hoặc **liệt kê image** để xem ID thực."
+  - ✅ Chỉ dùng ID có trong phần context (dòng bắt đầu bằng FLAVOR|, IMAGE|, SUBNET|...)
 
 QUAN TRỌNG — ĐỘ TRỄ TRẠNG THÁI:
 GreenNode API nhận lệnh ngay lập tức nhưng việc thực thi thực tế cần 30-120 giây.
@@ -1170,6 +1177,26 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 "needConfirm":   True,
                 "pendingAction": {"type": "vm_create", "params": _params, "desc": _desc},
             })
+        else:
+            # Resolution failed — show exactly what's missing + available data
+            _flavor_sample = "\n".join(
+                f"  • `{f.get('id','?')}` — {f.get('name','?')} ({f.get('vcpus','?')} vCPU / {f.get('ram','?')} MB)"
+                for f in flavors[:5]) or "  _(Không lấy được — thử hỏi **liệt kê flavor**)_"
+            _image_sample = "\n".join(
+                f"  • `{i.get('id','?')}` — {i.get('name','?')}"
+                for i in images[:5]) or "  _(Không lấy được — thử hỏi **liệt kê image**)_"
+            _subnet_sample = "\n".join(
+                f"  • `{s.get('id') or s.get('uuid','?')}` — {s.get('name','?')} ({s.get('cidr','?')})"
+                for s in subnets[:5]) or "  _(Không lấy được subnet nào)_"
+            reply = (
+                f"⚠️ **Không thể tự động resolve params**: {_err}\n\n"
+                f"Dữ liệu API lấy được:\n\n"
+                f"**Flavor** ({len(flavors)} total):\n{_flavor_sample}\n\n"
+                f"**Image** ({len(images)} total):\n{_image_sample}\n\n"
+                f"**Subnet** ({len(subnets)} total):\n{_subnet_sample}\n\n"
+                f"💡 Gõ **liệt kê flavor**, **liệt kê image** để xem đầy đủ danh sách với ID thực."
+            )
+            return jsonify({"reply": reply, "fetchedAt": now})
 
     if confirmed and pending_action:
         # User confirmed → execute the action NOW
@@ -1371,6 +1398,27 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                     lines.append(f"| `{fid}` | {fname} | {vcpu} vCPU | {ram} MB | {disk} GB |")
                 reply  = f"⚡ **Danh sách Flavor** ({len(flavors)} total):\n\n" + "\n".join(lines)
                 reply += "\n\n💡 Để resize VM: **resize vm [tên VM] sang [flavor_id]**"
+                reply += "\n💡 Để tạo VM: **tạo vm** rồi chỉ định flavor theo tên hoặc ID"
+                return jsonify({"reply": reply, "fetchedAt": now})
+
+            # ── List images ───────────────────────────────────────────────────
+            if action_type == "list_images":
+                if not images:
+                    return jsonify({"reply": "⚠️ Không lấy được danh sách image từ API.", "fetchedAt": now})
+                # Group by OS type
+                from collections import defaultdict
+                by_os = defaultdict(list)
+                for i in images:
+                    os_type = i.get("imageType") or i.get("osType") or "Other"
+                    by_os[os_type].append(i)
+                lines = ["| Image ID | Tên | OS Type |", "|---|---|---|"]
+                for os_type in sorted(by_os.keys()):
+                    for i in by_os[os_type][:8]:  # max 8 per OS type
+                        iid   = i.get("id") or i.get("imageId", "?")
+                        iname = i.get("name", "?")
+                        lines.append(f"| `{iid}` | {iname} | {os_type} |")
+                reply  = f"🖼️ **Danh sách Image** ({len(images)} total):\n\n" + "\n".join(lines)
+                reply += "\n\n💡 Để tạo VM: **tạo vm** rồi chỉ định OS theo tên (vd: Ubuntu 22.04)"
                 return jsonify({"reply": reply, "fetchedAt": now})
 
             # ── Tag resource (low-risk — no confirm) ─────────────────────────
