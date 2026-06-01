@@ -964,17 +964,22 @@ def resolve_vm_create_params(message, flavors, images, subnets, networks, sshkey
     want_fip = (any(w in msg for w in ["floating", "wan", "public ip", "ip công cộng"])
                 and "không" not in msg)
 
-    # ── Validation ───────────────────────────────────────────────────────────
+    # ── Validation — subnet is optional (GreenNode auto-assigns default) ────────
     missing = []
     if not vm_name: missing.append("**tên VM**")
     if not flavor:  missing.append("**flavor** (ví dụ: 2vCPU 4GB)")
     if not image:   missing.append("**hệ điều hành** (Ubuntu 22.04, CentOS 7…)")
-    if not subnet:  missing.append("**subnet / network**")
+    # subnet NOT required — GreenNode project always has a default VPC/subnet
     if missing:
         return None, f"Còn thiếu: {', '.join(missing)}."
 
+    _net_id    = (subnet.get("networkId") or subnet.get("networkUuid")
+                  or (network.get("uuid") if network else "")) if subnet else ""
+    _subnet_id = (subnet.get("id") or subnet.get("uuid", "")) if subnet else ""
+    _subnet_nm = subnet.get("name", "default") if subnet else "default"
+
     print(f"[RESOLVE] name={vm_name} flavorId={flavor['id']} imageId={image['id']} "
-          f"flavor={flavor['name']} image={image['name']}")
+          f"subnet={'OK:'+_subnet_nm if subnet else 'EMPTY(will use default)'}")
 
     return {
         "name":           vm_name,
@@ -982,10 +987,9 @@ def resolve_vm_create_params(message, flavors, images, subnets, networks, sshkey
         "flavorName":     flavor["name"],
         "imageId":        image["id"],
         "imageName":      image["name"],
-        "networkId":      (subnet.get("networkId") or subnet.get("networkUuid")
-                           or (network.get("uuid") if network else "")),
-        "subnetId":       subnet.get("id") or subnet.get("uuid"),
-        "subnetName":     subnet.get("name"),
+        "networkId":      _net_id,
+        "subnetId":       _subnet_id,
+        "subnetName":     _subnet_nm,
         "rootDiskSize":   root_disk,
         "rootDiskTypeId": vol_type.get("id", ""),
         "sshKeyId":       (sshkey.get("id") or sshkey.get("uuid")) if sshkey else None,
@@ -1264,7 +1268,8 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
             ssh_name    = next((k.get("name","?") for k in sshkeys
                                 if k.get("id") == _params.get("sshKeyId")
                                 or k.get("uuid") == _params.get("sshKeyId")), "_(không có)_")
-            subnet_name = _params.get("subnetName", _params.get("subnetId","?"))
+            subnet_name = (_params.get("subnetName") or _params.get("subnetId") or
+                           "_(default VPC — tự động)_")
             spec = (
                 f"🖥️ **Xác nhận tạo VM mới**\n\n"
                 f"| Thông số | Giá trị |\n|---|---|\n"
@@ -1285,41 +1290,20 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
             })
         else:
             # Resolution failed — check if it's specifically the subnet missing
-            _only_subnet_missing = _err and "subnet" in _err.lower() and not any(
-                w in _err.lower() for w in ["flavor", "hệ điều hành", "tên vm"])
-
-            if _only_subnet_missing and not subnets:
-                # Subnet API failed (likely auth) — ask user to specify subnet name
-                # Show what we DID resolve from reference data
-                _tmp_params, _ = resolve_vm_create_params(
-                    user_message, flavors, images,
-                    [{"id": "PENDING", "name": "default", "networkId": "PENDING"}],
-                    networks, sshkeys, vol_types)
-                _flavor_hint = _tmp_params["flavorName"] if _tmp_params else "?"
-                _image_hint  = _tmp_params["imageName"]  if _tmp_params else "?"
-                reply = (
-                    f"✅ Đã xác định được:\n"
-                    f"- **Flavor**: {_flavor_hint}\n"
-                    f"- **Image**: {_image_hint}\n\n"
-                    f"⚠️ **Không lấy được danh sách subnet** từ API (có thể do lỗi xác thực).\n\n"
-                    f"Bạn vui lòng cho biết tên **subnet** muốn dùng là gì?\n"
-                    f"_(Ví dụ: `subnet-default`, `production-subnet`, hoặc xem trên GreenNode portal)_"
-                )
-            else:
-                # Generic missing info — guide user
-                _ref_flav_hint = "\n".join(
-                    f"  • **{f['name']}** — {f['cpu']} vCPU / {f['ram_gb']} GB"
-                    for f in ref_flavors() if f.get("preferred"))[:300]
-                _ref_img_hint = "\n".join(
-                    f"  • **{i['name']}**"
-                    for i in ref_images() if i.get("recommended") or "22" in i["name"])[:200]
-                reply = (
-                    f"⚠️ **Chưa đủ thông tin để tạo VM**: {_err}\n\n"
-                    f"**Flavor phổ biến** (S2 generation):\n{_ref_flav_hint}\n\n"
-                    f"**Image phổ biến**:\n{_ref_img_hint}\n\n"
-                    f"💡 Thử lại với đầy đủ thông tin, ví dụ:\n"
-                    f"> `tạo vm tên web-01 ubuntu 22.04 2vcpu 4gb`"
-                )
+            # Generic missing info (name/flavor/image) — guide user
+            _ref_flav_hint = "\n".join(
+                f"  • **{f['name']}** — {f['cpu']} vCPU / {f['ram_gb']} GB"
+                for f in ref_flavors() if f.get("preferred"))[:300]
+            _ref_img_hint = "\n".join(
+                f"  • **{i['name']}**"
+                for i in ref_images() if i.get("recommended") or "22.04" in i["name"])[:200]
+            reply = (
+                f"⚠️ **Chưa đủ thông tin để tạo VM**: {_err}\n\n"
+                f"**Flavor phổ biến** (S2 generation):\n{_ref_flav_hint}\n\n"
+                f"**Image phổ biến**:\n{_ref_img_hint}\n\n"
+                f"💡 Thử lại với đầy đủ thông tin, ví dụ:\n"
+                f"> `tạo vm tên web-01 ubuntu 22.04 2vcpu 4gb`"
+            )
             return jsonify({"reply": reply, "fetchedAt": now})
 
     if confirmed and pending_action:
