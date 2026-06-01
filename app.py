@@ -2229,14 +2229,41 @@ def execute_extended_action(token, uid, project_id, action_type, params):
             print(f"[VM_CREATE] using subnet object: {_sn}")
             # Extract subnet ID — try every possible field name
             subnet_id  = (subnet_id  or
-                          _sn.get("id") or _sn.get("uuid") or
+                          _sn.get("uuid") or _sn.get("id") or
                           _sn.get("subnetId") or _sn.get("subnetUuid") or
                           _sn.get("subnetID") or "")
             # Extract network ID — from subnet object or from first network
             network_id = (network_id or
-                          _sn.get("networkId") or _sn.get("networkUuid") or
+                          _sn.get("networkUuid") or _sn.get("networkId") or
                           _sn.get("vpcId") or _sn.get("vpcUuid") or
                           (_networks[0].get("uuid") or _networks[0].get("id") if _networks else ""))
+
+            # Detect zone from subnet and re-resolve flavor/image/voltype IDs for that zone
+            _zone_obj  = _sn.get("zone") or {}
+            _zone_name = (_zone_obj.get("name") if isinstance(_zone_obj, dict) else str(_zone_obj)) or ""
+            # zone_name like "HCM03-1B" → region="HCM", zone="HCM03-1B"
+            if _zone_name and "-" in _zone_name:
+                _region = _zone_name[:3]   # e.g. "HCM"
+                _zone   = _zone_name       # e.g. "HCM03-1B"
+                print(f"[VM_CREATE] subnet zone detected: region={_region} zone={_zone}")
+                # Re-resolve IDs from correct zone's reference data using stored names
+                _flavor_name = params.get("flavorName", "")
+                _image_name  = params.get("imageName", "")
+                for _f in ref_flavors(_region, _zone):
+                    if _f["name"] == _flavor_name:
+                        params["flavorId"] = _f["id"]
+                        print(f"[VM_CREATE] re-resolved flavorId={_f['id']} for zone {_zone}")
+                        break
+                for _i in ref_images(_region, _zone):
+                    if _i["name"] == _image_name:
+                        params["imageId"] = _i["id"]
+                        print(f"[VM_CREATE] re-resolved imageId={_i['id']} for zone {_zone}")
+                        break
+                for _v in ref_vol_types(_region, _zone):
+                    if _v.get("default"):
+                        params["rootDiskTypeId"] = _v["id"]
+                        print(f"[VM_CREATE] re-resolved rootDiskTypeId={_v['id']} for zone {_zone}")
+                        break
         elif _networks and not subnet_id:
             # Last resort: use first network ID, hope API accepts without subnetId
             _net0 = _networks[0]
