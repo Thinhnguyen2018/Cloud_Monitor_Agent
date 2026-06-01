@@ -815,8 +815,15 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         return ("list_flavors", {}, "Danh sách flavor khả dụng")
 
     # ── List images ───────────────────────────────────────────────────────────
-    if any(w in msg for w in ["liệt kê image", "xem image", "danh sách image", "image nào", "list image", "các image", "os nào", "hệ điều hành nào"]):
+    if any(w in msg for w in ["liệt kê image", "xem image", "danh sách image", "image nào",
+                               "list image", "các image", "os nào", "hệ điều hành nào",
+                               "có những os", "có những image", "supported os", "hỗ trợ os"]):
         return ("list_images", {}, "Danh sách image khả dụng")
+
+    # ── List volume types ─────────────────────────────────────────────────────
+    if any(w in msg for w in ["liệt kê volume type", "danh sách volume type", "volume type nào",
+                               "loại volume", "storage type", "nvme", "ssd type"]):
+        return ("list_volume_types", {}, "Danh sách volume type khả dụng")
 
     return (None, None, None)
 
@@ -1110,19 +1117,10 @@ def chat():
     fip_lines = "\n".join(f"FIP|{f['ip']}|{f['status']}|server:{f['server']}" for f in fips) or "(none)"
 
     # ── Format creation resources for LLM context ────────────────────────────
-    def fmt_flavor(f):
-        fid  = f.get("id") or f.get("flavorId","?")
-        name = f.get("name","?")
-        cpu  = f.get("vcpus") or f.get("cpu","?")
-        ram  = f.get("ram","?")
-        disk = f.get("disk","?")
-        return f"FLAVOR|{fid}|{name}|{cpu}vCPU|{ram}MB|{disk}GB"
-
-    def fmt_image(i):
-        iid  = i.get("id") or i.get("imageId","?")
-        name = i.get("name","?")
-        itype = i.get("imageType") or i.get("osType","?")
-        return f"IMAGE|{iid}|{name}|{itype}"
+    # Flavors, images, vol-types: use static reference data (authoritative IDs)
+    _ref_flavs = ref_flavors()   # all 68 flavors
+    _ref_imgs  = ref_images()    # all 43 images
+    _ref_vts   = ref_vol_types() # all 6 vol types
 
     def fmt_subnet(s):
         sid   = s.get("id") or s.get("uuid","?")
@@ -1136,16 +1134,32 @@ def chat():
         name = k.get("name","?")
         return f"SSHKEY|{kid}|{name}"
 
-    def fmt_voltype(v):
-        vid  = v.get("id") or v.get("uuid","?")
-        name = v.get("name","?")
-        return f"VOLTYPE|{vid}|{name}"
+    # Only show preferred/non-deprecated flavors in context to save tokens
+    _ctx_flavs = [f for f in _ref_flavs if f.get("preferred") and not f.get("deprecated")]
+    flavor_lines = "\n".join(
+        f"FLAVOR|{f['id']}|{f['name']}|{f['cpu']}vCPU|{f['ram_gb']}GB|{f['family']}"
+        for f in _ctx_flavs
+    ) or "(none)"
 
-    flavor_lines  = "\n".join(fmt_flavor(f) for f in flavors[:50])  or "(none)"
-    image_lines   = "\n".join(fmt_image(i)  for i in images[:30])   or "(none)"
-    subnet_lines  = "\n".join(fmt_subnet(s) for s in subnets)       or "(none)"
-    sshkey_lines  = "\n".join(fmt_sshkey(k) for k in sshkeys)       or "(none)"
-    voltype_lines = "\n".join(fmt_voltype(v) for v in vol_types)    or "(none)"
+    # Group images by OS family for context
+    _img_by_os: dict = {}
+    for i in _ref_imgs:
+        _img_by_os.setdefault(i["os"], []).append(i)
+    image_lines = "\n".join(
+        f"IMAGE|{i['id']}|{i['name']}|{i['os']}"
+        + ("|recommended" if i.get("recommended") else "")
+        for os_family in _img_by_os
+        for i in _img_by_os[os_family]
+    ) or "(none)"
+
+    voltype_lines = "\n".join(
+        f"VOLTYPE|{v['id']}|{v['name']}|{v['iops']}IOPS"
+        + ("|default" if v.get("default") else "")
+        for v in _ref_vts
+    ) or "(none)"
+
+    subnet_lines  = "\n".join(fmt_subnet(s) for s in subnets) or "(none)"
+    sshkey_lines  = "\n".join(fmt_sshkey(k) for k in sshkeys) or "(none)"
 
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     context = f"""=== REAL-TIME DATA (fetched: {now}) ===
@@ -1167,10 +1181,10 @@ USER: {user_info.get('username','?')} | email: {user_info.get('rootEmail','?')} 
 --- Floating IP ({len(fips)}) ---
 {fip_lines}
 
---- Flavor ({len(flavors)}) [dùng cho tạo/resize VM] ---
+--- Flavor ({len(_ctx_flavs)} preferred, {len(_ref_flavs)} total) [dùng cho tạo/resize VM] ---
 {flavor_lines}
 
---- Image ({len(images)}) [dùng cho tạo VM] ---
+--- Image ({len(_ref_imgs)} total) [dùng cho tạo VM] ---
 {image_lines}
 
 --- Subnet ({len(subnets)}) [dùng cho tạo VM] ---
@@ -1179,7 +1193,7 @@ USER: {user_info.get('username','?')} | email: {user_info.get('rootEmail','?')} 
 --- SSH Key ({len(sshkeys)}) [dùng cho tạo VM] ---
 {sshkey_lines}
 
---- Volume Type ({len(vol_types)}) [dùng cho tạo VM/Volume] ---
+--- Volume Type ({len(_ref_vts)}) [dùng cho tạo VM/Volume] ---
 {voltype_lines}"""
 
     system_prompt = f"""Bạn là GreenNode AI Assistant — trợ lý quản lý hạ tầng đám mây thông minh cho GreenNode (VNG Cloud) HCM-3.
@@ -1502,41 +1516,55 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                         return jsonify({"reply": "📊 **Quota sử dụng:**\n\n" + "\n".join(lines), "fetchedAt": now})
                 return jsonify({"reply": f"⚠️ Không lấy được quota (status {s}).", "fetchedAt": now})
 
-            # ── List flavors ──────────────────────────────────────────────────
+            # ── List flavors (from static reference) ─────────────────────────
             if action_type == "list_flavors":
-                if not flavors:
-                    return jsonify({"reply": "⚠️ Không lấy được danh sách flavor.", "fetchedAt": now})
-                lines = ["| Flavor ID | Tên | vCPU | RAM | Disk |", "|---|---|---|---|---|"]
-                for f in sorted(flavors, key=lambda x: (x.get("vcpus", 0), x.get("ram", 0)))[:40]:
-                    fid   = f.get("id") or f.get("flavorId", "?")
-                    fname = f.get("name", "?")
-                    vcpu  = f.get("vcpus") or f.get("cpu", "?")
-                    ram   = f.get("ram", "?")
-                    disk  = f.get("disk", "?")
-                    lines.append(f"| `{fid}` | {fname} | {vcpu} vCPU | {ram} MB | {disk} GB |")
-                reply  = f"⚡ **Danh sách Flavor** ({len(flavors)} total):\n\n" + "\n".join(lines)
-                reply += "\n\n💡 Để resize VM: **resize vm [tên VM] sang [flavor_id]**"
-                reply += "\n💡 Để tạo VM: **tạo vm** rồi chỉ định flavor theo tên hoặc ID"
+                all_flavs = ref_flavors()
+                # Group by family
+                families: dict = {}
+                for f in sorted(all_flavs, key=lambda x: (x["cpu"], x["ram_gb"])):
+                    fam = f["family"].upper()
+                    families.setdefault(fam, []).append(f)
+                lines = []
+                for fam in ["GENERAL", "STANDARD", "HIGHMEM", "HIGHCPU"]:
+                    if fam not in families: continue
+                    lines.append(f"\n**{fam}**")
+                    lines.append("| ID | Tên | vCPU | RAM | Network | Gen |")
+                    lines.append("|---|---|---|---|---|---|")
+                    for f in families[fam]:
+                        gen_badge = "⭐" if f.get("preferred") else ("~~dep~~" if f.get("deprecated") else "")
+                        lines.append(f"| `{f['id']}` | {f['name']} | {f['cpu']} | {f['ram_gb']} GB | {f.get('network','?')} | {gen_badge} |")
+                reply = f"⚡ **Danh sách Flavor** ({len(all_flavs)} total, ⭐ = S2 preferred)\n" + "\n".join(lines)
+                reply += "\n\n💡 Tạo VM: `tạo vm tên [tên] ubuntu 22.04 2vcpu 4gb`"
+                reply += "\n💡 Resize VM: `resize vm [tên VM] sang 4vcpu 8gb`"
                 return jsonify({"reply": reply, "fetchedAt": now})
 
-            # ── List images ───────────────────────────────────────────────────
+            # ── List images (from static reference) ──────────────────────────
             if action_type == "list_images":
-                if not images:
-                    return jsonify({"reply": "⚠️ Không lấy được danh sách image từ API.", "fetchedAt": now})
-                # Group by OS type
-                from collections import defaultdict
-                by_os = defaultdict(list)
-                for i in images:
-                    os_type = i.get("imageType") or i.get("osType") or "Other"
-                    by_os[os_type].append(i)
-                lines = ["| Image ID | Tên | OS Type |", "|---|---|---|"]
-                for os_type in sorted(by_os.keys()):
-                    for i in by_os[os_type][:8]:  # max 8 per OS type
-                        iid   = i.get("id") or i.get("imageId", "?")
-                        iname = i.get("name", "?")
-                        lines.append(f"| `{iid}` | {iname} | {os_type} |")
-                reply  = f"🖼️ **Danh sách Image** ({len(images)} total):\n\n" + "\n".join(lines)
-                reply += "\n\n💡 Để tạo VM: **tạo vm** rồi chỉ định OS theo tên (vd: Ubuntu 22.04)"
+                all_imgs = ref_images()
+                by_os: dict = {}
+                for i in all_imgs:
+                    by_os.setdefault(i["os"], []).append(i)
+                lines = []
+                for os_fam in sorted(by_os.keys()):
+                    lines.append(f"\n**{os_fam}**")
+                    lines.append("| Image ID | Tên |")
+                    lines.append("|---|---|")
+                    for i in by_os[os_fam]:
+                        badge = " ⭐" if i.get("recommended") else ""
+                        lines.append(f"| `{i['id']}` | {i['name']}{badge} |")
+                reply = f"🖼️ **Danh sách Image** ({len(all_imgs)} total, ⭐ = recommended)\n" + "\n".join(lines)
+                reply += "\n\n💡 Tạo VM: `tạo vm tên [tên] ubuntu 22.04 2vcpu 4gb`"
+                return jsonify({"reply": reply, "fetchedAt": now})
+
+            # ── List volume types (from static reference) ─────────────────────
+            if action_type == "list_volume_types":
+                all_vts = ref_vol_types()
+                lines = ["| Volume Type ID | Tên | IOPS | Throughput |", "|---|---|---|---|"]
+                for v in all_vts:
+                    badge = " ✅ default" if v.get("default") else ""
+                    lines.append(f"| `{v['id']}` | {v['name']}{badge} | {v.get('iops','?')} | — |")
+                reply = f"💾 **Danh sách Volume Type** ({len(all_vts)} types):\n\n" + "\n".join(lines)
+                reply += "\n\n💡 Tạo volume: `tạo volume 100gb tên my-vol`"
                 return jsonify({"reply": reply, "fetchedAt": now})
 
             # ── Tag resource (low-risk — no confirm) ─────────────────────────
