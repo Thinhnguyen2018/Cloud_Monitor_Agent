@@ -2424,10 +2424,14 @@ def debug_subnets():
     if not client_id or not project_id:
         return jsonify({"error": "clientId and projectId required"}), 400
     try:
-        token, user_info = fetch_gn_token(client_id, client_secret)
+        cached = get_cached_token(client_id)
+        if cached:
+            token, user_info = cached["token"], cached["user_info"]
+        else:
+            token, user_info = fetch_gn_token(client_id, client_secret)
         uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
         P = project_id
-        result = {}
+        result = {"uid": uid, "used_cached_token": bool(cached)}
 
         # Try /subnets
         s1, d1 = gn_api(token, uid, "GET", f"v2/{P}/subnets")
@@ -2440,12 +2444,18 @@ def debug_subnets():
         networks = d2.get("listData", d2) if isinstance(d2, dict) else d2
         result["networks_endpoint"] = {"status": s2, "sample": networks[:2] if isinstance(networks, list) else d2}
 
-        # Try /networks/{id}/subnets for first network
+        # Try /networks/{id}/subnets for all networks
         if isinstance(networks, list) and networks:
-            nid = networks[0].get("id") or networks[0].get("uuid","")
-            s3, d3 = gn_api(token, uid, "GET", f"v2/{P}/networks/{nid}/subnets")
-            result[f"networks_{nid}_subnets"] = {"status": s3, "type": type(d3).__name__,
-                                                   "raw": d3 if not isinstance(d3, list) else d3[:2]}
+            for _net in networks[:5]:
+                nid = _net.get("id") or _net.get("uuid","")
+                if not nid: continue
+                s3, d3 = gn_api(token, uid, "GET", f"v2/{P}/networks/{nid}/subnets")
+                result[f"net_{nid}_subnets"] = {"status": s3, "type": type(d3).__name__,
+                                                 "raw": d3 if not isinstance(d3, list) else d3[:3]}
+                # Also try singular path
+                s4, d4 = gn_api(token, uid, "GET", f"v2/{P}/network/{nid}/subnet")
+                result[f"net_{nid}_subnet_singular"] = {"status": s4, "type": type(d4).__name__,
+                                                         "raw": d4 if not isinstance(d4, list) else d4[:3]}
 
         return jsonify(result)
     except Exception as e:
