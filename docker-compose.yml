@@ -9,4 +9,5 @@ services:
       - ./.env:/app/.env:ro
     environment:
       - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
     restart: unless-stopped
