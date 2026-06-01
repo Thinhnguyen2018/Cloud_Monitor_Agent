@@ -1066,17 +1066,27 @@ def chat():
         if s2 == 200: volumes = d2.get("listData", [])
         s3, d3 = gn_api(token, uid, "GET", f"v2/{P}/networks")
         if s3 == 200: networks = d3.get("listData", [])
+        def _parse_api(status, data):
+            """Safely extract list from any GreenNode API response shape."""
+            if status not in (200, 201): return []
+            if isinstance(data, list): return data
+            if isinstance(data, dict):
+                for k in ("listData","data","items","results","servers","volumes",
+                          "networks","subnets","flavors","images","sshKeys","volumeTypes"):
+                    if isinstance(data.get(k), list): return data[k]
+            return []
+
         # Fetch flavors, images, subnets, SSH keys, volume types for VM creation
         sf, df   = gn_api(token, uid, "GET", f"v2/{P}/flavors")
-        flavors  = df.get("listData", []) if sf == 200 else []
+        flavors  = _parse_api(sf, df)
         si, di   = gn_api(token, uid, "GET", f"v2/{P}/images")
-        images   = di.get("listData", []) if si == 200 else []
+        images   = _parse_api(si, di)
         ssu, dsu = gn_api(token, uid, "GET", f"v2/{P}/subnets")
-        subnets  = dsu.get("listData", []) if ssu == 200 else []
+        subnets  = _parse_api(ssu, dsu)
         ssk, dsk = gn_api(token, uid, "GET", f"v2/{P}/sshkeys")
-        sshkeys  = dsk.get("listData", []) if ssk == 200 else []
+        sshkeys  = _parse_api(ssk, dsk)
         svt, dvt = gn_api(token, uid, "GET", f"v2/{P}/volume-types")
-        vol_types = dvt.get("listData", []) if svt == 200 else []
+        vol_types = _parse_api(svt, dvt)
 
         # SG from VMs
         sg_map = {}
@@ -2160,26 +2170,30 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         network_id = params.get("networkId") or ""
         subnet_id  = params.get("subnetId")  or ""
 
-        # Always re-fetch subnets to get real IDs (may have been empty at chat time)
-        sn_s, sn_d = gn_api(token, uid, "GET", f"v2/{P}/subnets")
-        print(f"[VM_CREATE] /subnets -> status={sn_s} raw_keys={list(sn_d.keys()) if isinstance(sn_d,dict) else type(sn_d)} raw={str(sn_d)[:300]}")
-        _subnets = (sn_d.get("listData") or sn_d.get("data") or
-                    sn_d.get("subnets") or sn_d.get("items") or
-                    (sn_d if isinstance(sn_d, list) else []))
+        def _parse_list(d):
+            """Extract list from any API response shape."""
+            if isinstance(d, list):   return d
+            if isinstance(d, dict):
+                for k in ("listData","data","subnets","networks","items","results"):
+                    if d.get(k): return d[k]
+            return []
 
-        # If flat /subnets is empty, try fetching per-network
+        # Always re-fetch subnets to get real IDs
+        sn_s, sn_d = gn_api(token, uid, "GET", f"v2/{P}/subnets")
+        _subnets = _parse_list(sn_d)
+        print(f"[VM_CREATE] /subnets -> status={sn_s} type={type(sn_d).__name__} count={len(_subnets)} sample={str(_subnets[:1])[:200]}")
+
+        # Fallback: try per-network subnets endpoint
         if not _subnets:
             nw_s, nw_d = gn_api(token, uid, "GET", f"v2/{P}/networks")
-            print(f"[VM_CREATE] /networks -> status={nw_s} raw={str(nw_d)[:300]}")
-            _networks = (nw_d.get("listData") or nw_d.get("data") or
-                         nw_d.get("networks") or (nw_d if isinstance(nw_d, list) else []))
+            _networks = _parse_list(nw_d)
+            print(f"[VM_CREATE] /networks -> status={nw_s} count={len(_networks)}")
             for _net in _networks[:3]:
                 _nid = _net.get("uuid") or _net.get("id") or ""
                 if not _nid: continue
                 ns_s, ns_d = gn_api(token, uid, "GET", f"v2/{P}/networks/{_nid}/subnets")
-                print(f"[VM_CREATE] /networks/{_nid}/subnets -> status={ns_s} raw={str(ns_d)[:200]}")
-                _nsubs = (ns_d.get("listData") or ns_d.get("data") or
-                          ns_d.get("subnets") or (ns_d if isinstance(ns_d, list) else []))
+                _nsubs = _parse_list(ns_d)
+                print(f"[VM_CREATE] /networks/{_nid}/subnets -> status={ns_s} count={len(_nsubs)} sample={str(_nsubs[:1])[:200]}")
                 if _nsubs:
                     _subnets = _nsubs
                     break
