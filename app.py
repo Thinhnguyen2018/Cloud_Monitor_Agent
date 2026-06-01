@@ -2162,8 +2162,27 @@ def execute_extended_action(token, uid, project_id, action_type, params):
 
         # Always re-fetch subnets to get real IDs (may have been empty at chat time)
         sn_s, sn_d = gn_api(token, uid, "GET", f"v2/{P}/subnets")
-        _subnets = sn_d.get("listData", []) if sn_s == 200 else []
-        print(f"[VM_CREATE] subnets API -> status={sn_s} count={len(_subnets)} sample={str(_subnets[:1])[:200]}")
+        print(f"[VM_CREATE] /subnets -> status={sn_s} raw_keys={list(sn_d.keys()) if isinstance(sn_d,dict) else type(sn_d)} raw={str(sn_d)[:300]}")
+        _subnets = (sn_d.get("listData") or sn_d.get("data") or
+                    sn_d.get("subnets") or sn_d.get("items") or
+                    (sn_d if isinstance(sn_d, list) else []))
+
+        # If flat /subnets is empty, try fetching per-network
+        if not _subnets:
+            nw_s, nw_d = gn_api(token, uid, "GET", f"v2/{P}/networks")
+            print(f"[VM_CREATE] /networks -> status={nw_s} raw={str(nw_d)[:300]}")
+            _networks = (nw_d.get("listData") or nw_d.get("data") or
+                         nw_d.get("networks") or (nw_d if isinstance(nw_d, list) else []))
+            for _net in _networks[:3]:
+                _nid = _net.get("uuid") or _net.get("id") or ""
+                if not _nid: continue
+                ns_s, ns_d = gn_api(token, uid, "GET", f"v2/{P}/networks/{_nid}/subnets")
+                print(f"[VM_CREATE] /networks/{_nid}/subnets -> status={ns_s} raw={str(ns_d)[:200]}")
+                _nsubs = (ns_d.get("listData") or ns_d.get("data") or
+                          ns_d.get("subnets") or (ns_d if isinstance(ns_d, list) else []))
+                if _nsubs:
+                    _subnets = _nsubs
+                    break
 
         if _subnets:
             _sn = _subnets[0]
