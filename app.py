@@ -2056,7 +2056,7 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     # Body: {persistentVolume: bool, tags: [], zoneId: str}
     if action_type == "volume_attach":
         volume_id = params.get("volumeId")
-        server_id = params.get("serverId", "").replace("ins-", "")
+        server_id = params.get("serverId", "")
         print(f"[ATTACH] vol={volume_id} srv={server_id}")
         # AttachVolumeRequest body is empty per Terraform provider spec
         s, d = gn_api(token, uid, "PUT",
@@ -2070,7 +2070,7 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     if action_type == "volume_detach":
         volume_id   = params.get("volumeId")
         volume_name = params.get("volumeName", "")
-        server_id   = params.get("serverId", "").replace("ins-", "")
+        server_id   = params.get("serverId", "")
         # Block detach of boot volume
         if "boot" in volume_name.lower():
             return False, {"message": "Không thể gỡ boot volume — đây là ổ đĩa hệ thống của VM"}
