@@ -1242,6 +1242,38 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 reply = f"❌ **Thất bại:** {err}\n\nVui lòng thử lại hoặc kiểm tra trên GreenNode portal."
             return jsonify({"reply": reply, "fetchedAt": now, "actionDone": True})
 
+        # ── vm_create: re-resolve IDs from real API data before executing ──────
+        if action_type == "vm_create":
+            # Re-run server-side resolver using original message or reconstruct spec
+            _re_params, _re_err = resolve_vm_create_params(
+                # Reconstruct a spec string from stored params so resolver can match
+                f"tạo vm tên {params.get('name','')} "
+                f"{params.get('imageName', params.get('imageId',''))} "
+                f"{params.get('flavorName', params.get('flavorId',''))} "
+                f"{params.get('subnetName','')}",
+                flavors, images, subnets, networks, sshkeys, vol_types
+            )
+            if _re_params:
+                # Merge: keep any extra fields from original params, overlay resolved IDs
+                params = {**params, **_re_params}
+                print(f"[VM_CREATE_RESOLVED] resolved params={params}")
+            else:
+                # Resolver failed — validate that existing IDs look real
+                _iid = str(params.get("imageId", ""))
+                _fid = str(params.get("flavorId", ""))
+                _real_img_ids = {str(i.get("uuid") or i.get("id") or "") for i in images}
+                _real_flv_ids = {str(f.get("id") or f.get("flavorId") or "") for f in flavors}
+                _iid_ok = _iid in _real_img_ids or re.match(r'^[0-9a-fA-F\-]{36}$', _iid)
+                _fid_ok = _fid in _real_flv_ids
+                if not _iid_ok or not _fid_ok:
+                    _bad = []
+                    if not _iid_ok: _bad.append(f"imageId `{_iid}` không hợp lệ")
+                    if not _fid_ok: _bad.append(f"flavorId `{_fid}` không hợp lệ")
+                    reply = (f"❌ Không thể tạo VM — {'; '.join(_bad)}.\n\n"
+                             f"Hãy thử lại với mô tả đầy đủ hơn, ví dụ:\n"
+                             f"> tạo vm tên my-server ubuntu 22.04 2vcpu 4gb")
+                    return jsonify({"reply": reply, "fetchedAt": now, "actionDone": True})
+
         # Handle confirmed volume/FIP/SG actions
         EXTENDED_CONFIRM = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach","vm_rename","volume_rename","sg_rule_add","sg_rule_remove","vm_snapshot","vm_create","vm_resize","vm_delete","volume_create","volume_delete"}
         if action_type in EXTENDED_CONFIRM:
