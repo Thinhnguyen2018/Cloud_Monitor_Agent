@@ -629,9 +629,15 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
                          (vol_type.get("zoneId")) or
                          (_zone_obj.get("name") if isinstance(_zone_obj, dict) else "") or
                          vol.get("zoneId") or "")
+            _vm_id = vm.get("uuid") or vm.get("id") or ""
+            if _vm_id and not _vm_id.startswith("ins-"):
+                _vm_id = "ins-" + _vm_id
+            _vol_id = vol_id or ""
+            if _vol_id and not _vol_id.startswith("vol-"):
+                _vol_id = "vol-" + _vol_id
             return ("volume_attach",
-                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
-                     "volumeId": vol_id, "volumeName": vol_name, "zoneId": zone_id},
+                    {"serverId": _vm_id, "serverName": vm.get("name"),
+                     "volumeId": _vol_id, "volumeName": vol_name, "zoneId": zone_id},
                     f"Gắn volume **{vol_name}** (ID: `{str(vol_id)[:8]}...`) vào VM **{vm.get('name')}**")
         missing = f"tên VM{' ✓' if vm else ' ✗'} và tên Volume{' ✓' if vol else ' ✗'}"
         return ("volume_attach", None, f"Không tìm thấy: {missing}. Hỏi 'liệt kê volume' để xem danh sách.")
