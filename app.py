@@ -2279,22 +2279,60 @@ def execute_extended_action(token, uid, project_id, action_type, params):
                 f"subnet_obj={_sn_debug[:300]}"
             )}
 
-        print(f"[VM_CREATE] final networkId={network_id} subnetId={subnet_id}")
-        s, d = gn_api(token, uid, "POST", f"v2/{P}/servers", {
-            "name":            params.get("name"),
-            "flavorId":        params.get("flavorId"),
-            "imageId":         params.get("imageId"),
-            "networkId":       network_id,
-            "subnetId":        subnet_id,
-            "rootDiskSize":    params.get("rootDiskSize", 40),
-            "rootDiskTypeId":  params.get("rootDiskTypeId"),
-            "encryptionVolume": False,
-            "attachFloating":  params.get("attachFloating", False),
-            "sshKeyId":        params.get("sshKeyId") or None,
-            "secgroupIds":     params.get("secgroupIds", []),
-            "tags":            [],
-        })
-        print(f"[VM_CREATE] POST /servers -> {s} {str(d)[:200]}")
+        def _build_server_body():
+            return {
+                "name":            params.get("name"),
+                "flavorId":        params.get("flavorId"),
+                "imageId":         params.get("imageId"),
+                "networkId":       network_id,
+                "subnetId":        subnet_id,
+                "rootDiskSize":    params.get("rootDiskSize", 40),
+                "rootDiskTypeId":  params.get("rootDiskTypeId"),
+                "encryptionVolume": False,
+                "attachFloating":  params.get("attachFloating", False),
+                "sshKeyId":        params.get("sshKeyId") or None,
+                "secgroupIds":     params.get("secgroupIds", []),
+                "tags":            [],
+            }
+
+        print(f"[VM_CREATE] POST /servers flavorId={params.get('flavorId')} imageId={params.get('imageId')}")
+        s, d = gn_api(token, uid, "POST", f"v2/{P}/servers", _build_server_body())
+        print(f"[VM_CREATE] POST /servers -> {s} {str(d)[:300]}")
+
+        # Auto-retry if zone mismatch: parse error to get correct zone and re-resolve
+        if s not in OK:
+            err_msg = ""
+            if isinstance(d, dict):
+                err_msg = d.get("message", "") or str(d)
+            elif isinstance(d, list) and d:
+                err_msg = str(d[0].get("message", d[0]))
+
+            # Pattern: "isn't allowed using at zone id HCM03-1B"
+            _zone_match = re.search(r"zone id (HCM\d+-\d+[A-Z]|HAN\d+-\d+[A-Z])", err_msg)
+            if _zone_match:
+                _correct_zone = _zone_match.group(1)   # e.g. "HCM03-1B"
+                _correct_region = _correct_zone[:3]     # e.g. "HCM"
+                print(f"[VM_CREATE] Zone mismatch detected — retrying with zone {_correct_zone}")
+                _flavor_name = params.get("flavorName", "")
+                _image_name  = params.get("imageName", "")
+                for _f in ref_flavors(_correct_region, _correct_zone):
+                    if _f["name"] == _flavor_name:
+                        params["flavorId"] = _f["id"]
+                        print(f"[VM_CREATE] retry flavorId={_f['id']}")
+                        break
+                for _i in ref_images(_correct_region, _correct_zone):
+                    if _i["name"] == _image_name:
+                        params["imageId"] = _i["id"]
+                        print(f"[VM_CREATE] retry imageId={_i['id']}")
+                        break
+                for _v in ref_vol_types(_correct_region, _correct_zone):
+                    if _v.get("default"):
+                        params["rootDiskTypeId"] = _v["id"]
+                        print(f"[VM_CREATE] retry rootDiskTypeId={_v['id']}")
+                        break
+                s, d = gn_api(token, uid, "POST", f"v2/{P}/servers", _build_server_body())
+                print(f"[VM_CREATE] RETRY POST /servers -> {s} {str(d)[:300]}")
+
         return s in OK, d
 
     # ── Resize VM ─────────────────────────────────────────────────────────────
