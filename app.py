@@ -816,6 +816,54 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
                     f"Thêm tag **{tag_val}** cho VM **{vm.get('name')}**")
         return ("resource_tag", None, "Cần biết tên VM và tag. VD: 'thêm tag env:prod cho vm-web'")
 
+    # ── Resize Volume ─────────────────────────────────────────────────────────
+    if any(w in msg for w in ["resize volume", "tăng dung lượng", "mở rộng volume", "extend volume", "tăng size volume", "nâng dung lượng"]):
+        vol = find_volume(msg)
+        size_m = re.search(r'(\d+)\s*(?:gb|GB|G)', message)
+        new_size = int(size_m.group(1)) if size_m else None
+        if vol and new_size:
+            vol_name = vol.get("name") or vol.get("volumeName")
+            cur_size = vol.get("size", 0)
+            if new_size <= cur_size:
+                return (None, None, f"Dung lượng mới ({new_size}GB) phải lớn hơn hiện tại ({cur_size}GB). Volume không thể thu nhỏ.")
+            return ("volume_resize",
+                    {"volumeId": vol.get("uuid"), "volumeName": vol_name, "size": new_size},
+                    f"Tăng dung lượng Volume **{vol_name}** từ **{cur_size}GB** → **{new_size}GB**")
+        hint = f"Volume **{vol.get('name')}** hiện có {vol.get('size','?')}GB. " if vol else ""
+        return ("volume_resize", None, f"{hint}Vui lòng gõ: **tăng dung lượng [tên volume] lên [size]GB**")
+
+    # ── SSH Key: tạo mới ─────────────────────────────────────────────────────
+    if any(w in msg for w in ["tạo ssh key", "tạo key pair", "tạo keypair", "thêm ssh key", "generate key", "tạo key mới"]):
+        key_m = re.search(r'(?:tên|name)\s+([\w\-\.]+)', message, re.IGNORECASE)
+        if not key_m:
+            words = [w for w in message.split() if len(w) > 3 and w not in ["tạo","ssh","key","pair","keypair","thêm","generate","mới"]]
+            key_name = words[-1] if words else None
+        else:
+            key_name = key_m.group(1)
+        if key_name:
+            return ("sshkey_create",
+                    {"name": key_name},
+                    f"Tạo SSH Key Pair mới tên **{key_name}** (private key sẽ hiển thị 1 lần duy nhất)")
+        return ("sshkey_create", None, "Bạn muốn đặt tên gì cho SSH Key? VD: **tạo ssh key tên deploy-key**")
+
+    # ── SSH Key: xóa ─────────────────────────────────────────────────────────
+    if any(w in msg for w in ["xóa ssh key", "xoá ssh key", "delete ssh key", "xóa keypair", "xóa key pair", "remove key"]):
+        key_m = None
+        for k in sshkeys:
+            kname = (k.get("name") or "").lower()
+            if kname and kname in msg:
+                key_m = k
+                break
+        if key_m:
+            return ("sshkey_delete",
+                    {"keyId": key_m.get("id") or key_m.get("uuid"), "keyName": key_m.get("name")},
+                    f"⚠️ XÓA SSH Key **{key_m.get('name')}** — không thể khôi phục!")
+        return ("sshkey_delete", None, "Bạn muốn xóa SSH Key nào? Hỏi **liệt kê ssh key** để xem danh sách.")
+
+    # ── SSH Key: liệt kê ─────────────────────────────────────────────────────
+    if any(w in msg for w in ["liệt kê ssh", "xem ssh key", "danh sách key", "list ssh key", "ssh key nào", "các key"]):
+        return ("list_sshkeys", {}, "Danh sách SSH Key Pairs")
+
     # ── Quota usage ───────────────────────────────────────────────────────────
     if any(w in msg for w in ["quota", "hạn mức", "giới hạn tài nguyên", "quota usage", "còn quota", "dùng bao nhiêu quota"]):
         return ("quota_usage", {}, "Xem hạn mức sử dụng tài nguyên")
@@ -1247,6 +1295,9 @@ HƯỚNG DẪN TRẢ LỜI:
   - vm_delete: {{"serverId": "uuid", "serverName": "tên"}}
   - volume_create: {{"name": "tên", "size": 20, "volumeTypeId": "vtype-xxx"}}
   - volume_delete: {{"volumeId": "uuid", "volumeName": "tên"}}
+  - volume_resize: {{"volumeId": "uuid", "volumeName": "tên", "size": 50}}
+  - sshkey_create: {{"name": "tên-key"}}
+  - sshkey_delete: {{"keyId": "uuid", "keyName": "tên"}}
   - vm_create: {{"name": "tên", "flavorId": "flav-xxx", "imageId": "img-xxx", "networkId": "net-xxx", "subnetId": "sub-xxx", "rootDiskSize": 20, "rootDiskTypeId": "vtype-xxx", "sshKeyId": "key-xxx hoặc null", "secgroupIds": [], "attachFloating": false, "flavorName": "tên flavor", "imageName": "tên image"}}
   ⚠️ QUAN TRỌNG:
   - Chỉ trả về JSON thuần duy nhất, KHÔNG có text hay markdown xung quanh.
@@ -1375,12 +1426,15 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                     return jsonify({"reply": reply, "fetchedAt": now, "actionDone": True})
 
         # Handle confirmed volume/FIP/SG actions
-        EXTENDED_CONFIRM = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach","vm_rename","volume_rename","sg_rule_add","sg_rule_remove","vm_snapshot","vm_create","vm_resize","vm_delete","volume_create","volume_delete"}
+        EXTENDED_CONFIRM = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach","vm_rename","volume_rename","sg_rule_add","sg_rule_remove","vm_snapshot","vm_create","vm_resize","vm_delete","volume_create","volume_delete","volume_resize","sshkey_create","sshkey_delete"}
         if action_type in EXTENDED_CONFIRM:
             ok, data = execute_extended_action(token, uid, project_id, action_type, params)
             labels = {
                 "volume_attach":    f"Đã gắn volume **{params.get('volumeName','?')}** vào VM **{params.get('serverName','?')}**",
                 "volume_detach":    f"Đã gỡ volume **{params.get('volumeName','?')}** khỏi VM **{params.get('serverName','?')}**",
+                "volume_resize":    f"Đã tăng dung lượng Volume **{params.get('volumeName','?')}** lên **{params.get('size','?')}GB**",
+                "sshkey_create":    f"Đã tạo SSH Key Pair **{params.get('name','?')}**",
+                "sshkey_delete":    f"Đã xóa SSH Key **{params.get('keyName','?')}**",
                 "fip_associate":    f"Đã gắn Floating IP **{params.get('floatingIp','?')}** vào VM **{params.get('serverName','?')}**",
                 "fip_disassociate": f"Đã gỡ Floating IP khỏi VM **{params.get('serverName','?')}**",
                 "sg_attach":        f"Đã gắn Security Group vào VM **{params.get('serverName','?')}**",
@@ -1395,7 +1449,21 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 "volume_delete":    f"Đã xóa Volume **{params.get('volumeName','?')}**",
             }
             if ok:
-                reply = f"✅ {labels.get(action_type, 'Thành công!')}"
+                # SSH key create: show private key (only shown once!)
+                if action_type == "sshkey_create":
+                    priv_key = (data or {}).get("privateKey") or (data or {}).get("private_key") or ""
+                    pub_key  = (data or {}).get("publicKey")  or (data or {}).get("public_key")  or ""
+                    key_name = params.get("name","?")
+                    reply = (f"✅ Đã tạo SSH Key Pair **{key_name}**\n\n"
+                             f"⚠️ **Lưu private key ngay — chỉ hiển thị 1 lần duy nhất!**\n\n")
+                    if priv_key:
+                        reply += f"```\n{priv_key}\n```\n"
+                    if pub_key:
+                        reply += f"\n**Public Key:**\n```\n{pub_key}\n```"
+                    if not priv_key and not pub_key:
+                        reply += f"Key đã tạo. Vui lòng tải về từ GreenNode portal."
+                else:
+                    reply = f"✅ {labels.get(action_type, 'Thành công!')}"
             else:
                 reply = f"❌ Thất bại: {data}"
             return jsonify({"reply": reply, "fetchedAt": now, "actionDone": True})
@@ -1589,6 +1657,20 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 reply += "\n\n💡 Tạo volume: `tạo volume 100gb tên my-vol`"
                 return jsonify({"reply": reply, "fetchedAt": now})
 
+            # ── List SSH Keys ─────────────────────────────────────────────────
+            if action_type == "list_sshkeys":
+                if not sshkeys:
+                    return jsonify({"reply": "🔑 Chưa có SSH Key nào. Gõ **tạo ssh key tên [tên]** để tạo mới.", "fetchedAt": now})
+                lines = ["| Tên | ID | Fingerprint |", "|---|---|---|"]
+                for k in sshkeys:
+                    kid  = k.get("id") or k.get("uuid") or "?"
+                    kname = k.get("name") or "?"
+                    fp   = k.get("fingerprint") or k.get("publicKey","")[:30] + "…" if k.get("publicKey") else "—"
+                    lines.append(f"| **{kname}** | `{kid}` | `{fp}` |")
+                reply = f"🔑 **SSH Key Pairs** ({len(sshkeys)} keys):\n\n" + "\n".join(lines)
+                reply += "\n\n💡 Tạo key mới: `tạo ssh key tên my-key`\n💡 Xóa key: `xóa ssh key [tên]`"
+                return jsonify({"reply": reply, "fetchedAt": now})
+
             # ── Tag resource (low-risk — no confirm) ─────────────────────────
             if action_type == "resource_tag" and params:
                 ok, data = execute_extended_action(token, uid, project_id, action_type, params)
@@ -1667,7 +1749,7 @@ Tôi sẽ tự map tên → ID và xin xác nhận trước khi tạo."""
 
             # Extended actions (volume, FIP, SG, rename) → direct execute via action2
             # Actions requiring confirmation (medium risk)
-            CONFIRM_ACTIONS = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach","vm_rename","volume_rename","vm_snapshot","vm_create","vm_resize","vm_delete","volume_create","volume_delete"}
+            CONFIRM_ACTIONS = {"volume_attach","volume_detach","fip_associate","fip_disassociate","sg_attach","sg_detach","vm_rename","volume_rename","vm_snapshot","vm_create","vm_resize","vm_delete","volume_create","volume_delete","volume_resize","sshkey_create","sshkey_delete"}
             if action_type in CONFIRM_ACTIONS and params:
                 # vm_create: show full spec in confirm message
                 if action_type == "vm_create":
@@ -2403,6 +2485,38 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     if action_type == "volume_delete":
         volume_id = params.get("volumeId")
         s, d = gn_api(token, uid, "DELETE", f"v2/{P}/volumes/{volume_id}")
+        return s in OK, d
+
+    # ── Resize Volume ─────────────────────────────────────────────────────────
+    # PUT /v2/{projectId}/volumes/{volumeId}
+    if action_type == "volume_resize":
+        volume_id = params.get("volumeId")
+        new_size  = params.get("size")
+        if not volume_id or not new_size:
+            return False, {"message": "Thiếu volumeId hoặc size"}
+        vol_id_full = volume_id if str(volume_id).startswith("vol-") else f"vol-{volume_id}"
+        s, d = gn_api(token, uid, "PUT", f"v2/{P}/volumes/{vol_id_full}", {"size": int(new_size)})
+        print(f"[VOLUME_RESIZE] vol={vol_id_full} size={new_size} -> {s} {str(d)[:200]}")
+        return s in OK, d
+
+    # ── SSH Key: Create ───────────────────────────────────────────────────────
+    # POST /v2/{projectId}/sshkeys
+    if action_type == "sshkey_create":
+        key_name = params.get("name")
+        if not key_name:
+            return False, {"message": "Thiếu tên SSH Key"}
+        s, d = gn_api(token, uid, "POST", f"v2/{P}/sshkeys", {"name": key_name})
+        print(f"[SSHKEY_CREATE] name={key_name} -> {s} {str(d)[:300]}")
+        return s in OK, d
+
+    # ── SSH Key: Delete ───────────────────────────────────────────────────────
+    # DELETE /v2/{projectId}/sshkeys/{keypairId}
+    if action_type == "sshkey_delete":
+        key_id = params.get("keyId")
+        if not key_id:
+            return False, {"message": "Thiếu keyId"}
+        s, d = gn_api(token, uid, "DELETE", f"v2/{P}/sshkeys/{key_id}")
+        print(f"[SSHKEY_DELETE] keyId={key_id} -> {s} {str(d)[:200]}")
         return s in OK, d
 
     # ── Tag resource ──────────────────────────────────────────────────────────
