@@ -50,20 +50,44 @@ def ref_images(region="HCM", zone="HCM03-1A") -> list:
                 })
     return out
 
+def _estimate_price_vnd(cpu: int, ram_gb: int, family: str = "general", generation: str = "s2") -> int:
+    """
+    Estimate monthly price in VND based on VNG Cloud public pricing (approximate).
+    S2 generation pricing: CPU ~180,000 VND/vCPU/month, RAM ~36,000 VND/GB/month
+    S1 (deprecated): ~120,000 VND/vCPU/month, ~24,000 VND/GB/month
+    HighMem: +20% RAM premium. HighCPU: standard.
+    """
+    if "s2" in generation or generation == "":
+        cpu_rate = 180_000
+        ram_rate = 36_000
+    else:  # s1 deprecated
+        cpu_rate = 120_000
+        ram_rate = 24_000
+    if "highmem" in family.lower():
+        ram_rate = int(ram_rate * 1.2)
+    return cpu * cpu_rate + ram_gb * ram_rate
+
 def ref_flavors(region="HCM", zone="HCM03-1A") -> list:
-    """Flat list of {name, id, cpu, ram_gb, preferred} from static reference."""
+    """Flat list of {name, id, cpu, ram_gb, preferred, price_vnd} from static reference."""
     d = _load_ref(region, zone, "flavors")
     out = []
     for flav_name, meta in d.get("flavors", {}).items():
         if isinstance(meta, dict) and meta.get("id"):
+            cpu    = meta.get("cpu", 0)
+            ram_gb = meta.get("ram_gb", 0)
+            family = meta.get("family", "")
+            gen    = meta.get("generation", "s2")
             out.append({
-                "name":      flav_name,
-                "id":        meta["id"],
-                "cpu":       meta.get("cpu", 0),
-                "ram_gb":    meta.get("ram_gb", 0),
-                "family":    meta.get("family", ""),
-                "preferred": meta.get("preferred", False),
-                "deprecated":meta.get("deprecated", False),
+                "name":       flav_name,
+                "id":         meta["id"],
+                "cpu":        cpu,
+                "ram_gb":     ram_gb,
+                "family":     family,
+                "network":    meta.get("network", ""),
+                "preferred":  meta.get("preferred", False),
+                "deprecated": meta.get("deprecated", False),
+                "generation": gen,
+                "price_vnd":  _estimate_price_vnd(cpu, ram_gb, family, gen),
             })
     return out
 
@@ -1825,12 +1849,14 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 for fam in ["GENERAL", "STANDARD", "HIGHMEM", "HIGHCPU"]:
                     if fam not in families: continue
                     lines.append(f"\n**{fam}**")
-                    lines.append("| ID | Tên | vCPU | RAM | Network | Gen |")
+                    lines.append("| Tên | vCPU | RAM | Network | Giá ước tính/tháng | Gen |")
                     lines.append("|---|---|---|---|---|---|")
                     for f in families[fam]:
-                        gen_badge = "⭐" if f.get("preferred") else ("~~dep~~" if f.get("deprecated") else "")
-                        lines.append(f"| `{f['id']}` | {f['name']} | {f['cpu']} | {f['ram_gb']} GB | {f.get('network','?')} | {gen_badge} |")
+                        gen_badge  = "⭐ S2" if f.get("preferred") else ("~~S1~~" if f.get("deprecated") else "S2")
+                        price_str  = f"{f['price_vnd']:,}đ".replace(",", ".") if f.get("price_vnd") else "—"
+                        lines.append(f"| {f['name']} | {f['cpu']} | {f['ram_gb']} GB | {f.get('network','?')} | ~{price_str} | {gen_badge} |")
                 reply = f"⚡ **Danh sách Flavor** ({len(all_flavs)} total, ⭐ = S2 preferred)\n" + "\n".join(lines)
+                reply += "\n\n> 💡 Giá ước tính dựa theo bảng giá công khai VNG Cloud — chỉ mang tính tham khảo."
                 reply += "\n\n💡 Tạo VM: `tạo vm tên [tên] ubuntu 22.04 2vcpu 4gb`"
                 reply += "\n💡 Resize VM: `resize vm [tên VM] sang 4vcpu 8gb`"
                 return jsonify({"reply": reply, "fetchedAt": now})
@@ -1979,6 +2005,31 @@ Tôi sẽ tự map tên → ID và xin xác nhận trước khi tạo."""
                         "needConfirm": True,
                         "pendingAction": {"type": action_type, "params": params, "desc": desc}
                     })
+                # vm_resize: show cost comparison
+                if action_type == "vm_resize":
+                    new_flav_id  = params.get("flavorId","")
+                    all_flavs    = ref_flavors()
+                    new_flav_obj = next((f for f in all_flavs if f["id"] == new_flav_id), None)
+                    # current VM flavor
+                    cur_vm = next((v for v in vms if v.get("uuid") == params.get("serverId") or v.get("name") == params.get("serverName")), None)
+                    cur_flav_name = (cur_vm or {}).get("flavor", {}).get("name") or (cur_vm or {}).get("flavorName", "?") if cur_vm else "?"
+                    if new_flav_obj:
+                        new_price = f"{new_flav_obj['price_vnd']:,}đ/tháng".replace(",",".")
+                        spec = (
+                            f"⬆️ **Xác nhận Resize VM**\n\n"
+                            f"| | Hiện tại | Sau resize |\n|---|---|---|\n"
+                            f"| VM | **{params.get('serverName','?')}** | **{params.get('serverName','?')}** |\n"
+                            f"| Flavor | {cur_flav_name} | **{new_flav_obj['name']}** |\n"
+                            f"| vCPU | — | {new_flav_obj['cpu']} vCPU |\n"
+                            f"| RAM | — | {new_flav_obj['ram_gb']} GB |\n"
+                            f"| Chi phí ước tính | — | ~{new_price} |\n\n"
+                            f"⚠️ VM sẽ được **reboot** trong quá trình resize. Xác nhận?"
+                        )
+                        return jsonify({
+                            "reply": spec, "fetchedAt": now,
+                            "needConfirm": True,
+                            "pendingAction": {"type": action_type, "params": params, "desc": desc}
+                        })
                 reply = f"⚠️ **Xác nhận hành động**\n\n{desc}\n\nBạn có chắc muốn thực hiện không? Nhấn nút bên dưới hoặc gõ **xác nhận**."
                 return jsonify({
                     "reply": reply, "fetchedAt": now,
