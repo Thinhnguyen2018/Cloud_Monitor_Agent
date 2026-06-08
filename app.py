@@ -104,6 +104,7 @@ def get_conn():
 def init_db():
     conn = get_conn()
     cur  = conn.cursor()
+    ph   = "%s" if (USE_PG and DATABASE_URL) else "?"
     if USE_PG and DATABASE_URL:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS customers (
@@ -113,6 +114,49 @@ def init_db():
                 client_secret TEXT NOT NULL,
                 project_id  TEXT NOT NULL,
                 note        TEXT DEFAULT '',
+                created_at  TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        # Scheduled jobs — persist across restarts
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_jobs (
+                job_id      TEXT PRIMARY KEY,
+                customer    TEXT NOT NULL,
+                project_id  TEXT NOT NULL,
+                action      TEXT NOT NULL,
+                params      TEXT NOT NULL,
+                creds       TEXT NOT NULL,
+                run_time    TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status      TEXT DEFAULT 'pending',
+                result      TEXT DEFAULT '',
+                created_at  TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        # Audit log — all actions performed
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id          SERIAL PRIMARY KEY,
+                customer    TEXT NOT NULL,
+                project_id  TEXT NOT NULL,
+                action      TEXT NOT NULL,
+                resource    TEXT NOT NULL,
+                params      TEXT NOT NULL,
+                status      TEXT NOT NULL,
+                message     TEXT DEFAULT '',
+                performed_by TEXT DEFAULT 'admin',
+                created_at  TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        # Notifications
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id          SERIAL PRIMARY KEY,
+                customer    TEXT NOT NULL,
+                title       TEXT NOT NULL,
+                body        TEXT NOT NULL,
+                type        TEXT DEFAULT 'info',
+                read        BOOLEAN DEFAULT FALSE,
                 created_at  TIMESTAMP DEFAULT NOW()
             )
         """)
@@ -128,8 +172,122 @@ def init_db():
                 created_at  TEXT DEFAULT (datetime('now','localtime'))
             )
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_jobs (
+                job_id      TEXT PRIMARY KEY,
+                customer    TEXT NOT NULL,
+                project_id  TEXT NOT NULL,
+                action      TEXT NOT NULL,
+                params      TEXT NOT NULL,
+                creds       TEXT NOT NULL,
+                run_time    TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status      TEXT DEFAULT 'pending',
+                result      TEXT DEFAULT '',
+                created_at  TEXT DEFAULT (datetime('now','localtime'))
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer    TEXT NOT NULL,
+                project_id  TEXT NOT NULL,
+                action      TEXT NOT NULL,
+                resource    TEXT NOT NULL,
+                params      TEXT NOT NULL,
+                status      TEXT NOT NULL,
+                message     TEXT DEFAULT '',
+                performed_by TEXT DEFAULT 'admin',
+                created_at  TEXT DEFAULT (datetime('now','localtime'))
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer    TEXT NOT NULL,
+                title       TEXT NOT NULL,
+                body        TEXT NOT NULL,
+                type        TEXT DEFAULT 'info',
+                read        INTEGER DEFAULT 0,
+                created_at  TEXT DEFAULT (datetime('now','localtime'))
+            )
+        """)
     conn.commit()
     conn.close()
+
+# ── DB helpers ────────────────────────────────────────────────────────────────
+_PH = "%s" if (USE_PG and DATABASE_URL) else "?"
+
+def db_write_schedule(job_id, customer, project_id, action, params, creds, run_time, description):
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute(f"""INSERT OR REPLACE INTO scheduled_jobs
+        (job_id,customer,project_id,action,params,creds,run_time,description,status)
+        VALUES ({_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},'pending')""",
+        (job_id, customer, project_id, action, json.dumps(params), json.dumps(creds), run_time, description))
+    conn.commit(); conn.close()
+
+def db_update_schedule_status(job_id, status, result=""):
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute(f"UPDATE scheduled_jobs SET status={_PH}, result={_PH} WHERE job_id={_PH}", (status, result, job_id))
+    conn.commit(); conn.close()
+
+def db_delete_schedule(job_id):
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute(f"DELETE FROM scheduled_jobs WHERE job_id={_PH}", (job_id,))
+    conn.commit(); conn.close()
+
+def db_get_pending_schedules():
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("SELECT * FROM scheduled_jobs WHERE status='pending' ORDER BY run_time")
+    cols = [d[0] for d in cur.description]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    conn.close(); return rows
+
+def db_write_audit(customer, project_id, action, resource, params, status, message, performed_by="admin"):
+    try:
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"""INSERT INTO audit_log
+            (customer,project_id,action,resource,params,status,message,performed_by)
+            VALUES ({_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH})""",
+            (customer, project_id, action, resource, json.dumps(params) if isinstance(params,dict) else str(params),
+             status, message, performed_by))
+        conn.commit(); conn.close()
+    except Exception as e:
+        print(f"[AUDIT] write error: {e}")
+
+def db_get_audit(customer=None, limit=50):
+    conn = get_conn(); cur = conn.cursor()
+    if customer:
+        cur.execute(f"SELECT * FROM audit_log WHERE customer={_PH} ORDER BY created_at DESC LIMIT {_PH}", (customer, limit))
+    else:
+        cur.execute(f"SELECT * FROM audit_log ORDER BY created_at DESC LIMIT {_PH}", (limit,))
+    cols = [d[0] for d in cur.description]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    conn.close(); return rows
+
+def db_write_notification(customer, title, body, ntype="info"):
+    try:
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"""INSERT INTO notifications (customer,title,body,type)
+            VALUES ({_PH},{_PH},{_PH},{_PH})""", (customer, title, body, ntype))
+        conn.commit(); conn.close()
+    except Exception as e:
+        print(f"[NOTIF] write error: {e}")
+
+def db_get_notifications(customer, unread_only=False):
+    conn = get_conn(); cur = conn.cursor()
+    q = f"SELECT * FROM notifications WHERE customer={_PH}"
+    if unread_only: q += " AND read=0"
+    q += " ORDER BY created_at DESC LIMIT 50"
+    cur.execute(q, (customer,))
+    cols = [d[0] for d in cur.description]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    conn.close(); return rows
+
+def db_mark_notifications_read(customer):
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute(f"UPDATE notifications SET read=1 WHERE customer={_PH}", (customer,))
+    conn.commit(); conn.close()
 
 init_db()
 
@@ -249,7 +407,40 @@ scheduler = BackgroundScheduler(
     timezone=pytz.timezone('Asia/Ho_Chi_Minh')
 )
 scheduler.start()
-_scheduled_jobs = {}  # job_id → {desc, action, params, creds, run_time}
+_scheduled_jobs = {}  # job_id → {desc, action, params, creds, run_time, customer}
+
+def _restore_scheduled_jobs():
+    """On startup: reload pending jobs from DB back into APScheduler."""
+    tz = pytz.timezone('Asia/Ho_Chi_Minh')
+    now = datetime.now(tz)
+    rows = db_get_pending_schedules()
+    restored = 0
+    for row in rows:
+        try:
+            run_time = datetime.fromisoformat(row['run_time'])
+            if run_time.tzinfo is None:
+                run_time = tz.localize(run_time)
+            if run_time <= now:
+                db_update_schedule_status(row['job_id'], 'expired', 'Missed — server was offline')
+                continue
+            job_id = row['job_id']
+            _scheduled_jobs[job_id] = {
+                "desc":     row['description'],
+                "action":   row['action'],
+                "params":   json.loads(row['params']),
+                "creds":    json.loads(row['creds']),
+                "run_time": row['run_time'],
+                "customer": row['customer'],
+            }
+            scheduler.add_job(run_scheduled_job, trigger="date", run_date=run_time,
+                              args=[job_id], id=job_id, replace_existing=True)
+            restored += 1
+        except Exception as e:
+            print(f"[RESTORE] Failed job {row.get('job_id')}: {e}")
+    if restored:
+        print(f"[RESTORE] Restored {restored} scheduled jobs from DB")
+
+_restore_scheduled_jobs()
 
 @app.after_request
 def add_headers(response):
@@ -1397,13 +1588,12 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
 
         if action_type in ("vm_stop", "vm_start", "vm_reboot"):
             ok, err, _ = execute_vm_action(token, uid, project_id, action_type, params)
+            action_labels = {"vm_stop": "🔴 tắt", "vm_start": "🟢 khởi động", "vm_reboot": "🔄 khởi động lại"}
+            label = action_labels.get(action_type, "thực hiện")
+            db_write_audit(customer_name, project_id, action_type, server_name, params,
+                           'success' if ok else 'failed',
+                           f"Lệnh {label} VM {server_name}" if ok else str(err))
             if ok:
-                action_labels = {
-                    "vm_stop":   "🔴 tắt",
-                    "vm_start":  "🟢 khởi động",
-                    "vm_reboot": "🔄 khởi động lại",
-                }
-                label = action_labels.get(action_type, "thực hiện")
                 reply = f"✅ Đã gửi lệnh **{label}** VM **{server_name}**.\n\n⏳ GreenNode đang xử lý — chờ 1-2 phút rồi hỏi lại để kiểm tra trạng thái thực tế."
             else:
                 reply = f"❌ **Thất bại:** {err}\n\nVui lòng thử lại hoặc kiểm tra trên GreenNode portal."
@@ -1458,6 +1648,12 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 "volume_create":    f"Đã tạo Volume **{params.get('name','?')}**",
                 "volume_delete":    f"Đã xóa Volume **{params.get('volumeName','?')}**",
             }
+            # Audit log
+            resource_name = (params.get("serverName") or params.get("volumeName") or
+                             params.get("name") or params.get("keyName") or "?")
+            db_write_audit(customer_name, project_id, action_type, resource_name, params,
+                           'success' if ok else 'failed',
+                           labels.get(action_type,"") if ok else str(data))
             if ok:
                 # SSH key create: show private key (only shown once!)
                 if action_type == "sshkey_create":
@@ -1494,7 +1690,8 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                         client_id, client_secret, project_id,
                         sched_action,
                         {"serverId": server_id, "serverName": server_name},
-                        run_at
+                        run_at,
+                        customer=customer_name
                     )
                     if not result["ok"]:
                         return jsonify({"reply": f"❌ {result.get('error', 'Lỗi đặt lịch')}", "fetchedAt": now})
@@ -2046,22 +2243,42 @@ def run_scheduled_job(job_id: str):
     job = _scheduled_jobs.get(job_id)
     if not job:
         return
+    customer    = job.get("customer", "unknown")
+    action_type = job["action"]
+    params      = job["params"]
+    server_name = params.get("serverName", "VM")
+    action_label = {"vm_start": "Khởi động", "vm_stop": "Tắt", "vm_reboot": "Reboot"}.get(action_type, action_type)
     try:
-        creds       = job["creds"]
-        action_type = job["action"]
-        params      = job["params"]
+        creds  = job["creds"]
         token, user_info = fetch_gn_token(creds["clientId"], creds["clientSecret"])
         uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
         ok, err, vm_after = execute_vm_action(token, uid, creds["projectId"], action_type, params)
         status = vm_after.get("status", "?") if vm_after else "unknown"
-        print(f"[SCHEDULE] Job {job_id}: {action_type} on {params.get('serverName')} → {status}")
+        result_msg = f"Thành công — trạng thái: {status}" if ok else f"Thất bại: {err}"
+        print(f"[SCHEDULE] Job {job_id}: {action_type} on {server_name} → {status}")
+        # Persist result
+        db_update_schedule_status(job_id, 'done' if ok else 'failed', result_msg)
+        # Audit log
+        db_write_audit(customer, creds["projectId"], action_type, server_name, params,
+                       'success' if ok else 'failed', result_msg, performed_by="scheduler")
+        # Notification
+        icon = "✅" if ok else "❌"
+        db_write_notification(customer,
+            f"{icon} Lịch hẹn: {action_label} VM",
+            f"{action_label} VM **{server_name}** — {result_msg}",
+            ntype="success" if ok else "error")
     except Exception as e:
         print(f"[SCHEDULE] Job {job_id} error: {e}")
+        db_update_schedule_status(job_id, 'failed', str(e))
+        db_write_notification(customer,
+            f"❌ Lịch hẹn thất bại: {action_label} VM",
+            f"Lỗi khi {action_label.lower()} VM **{server_name}**: {e}",
+            ntype="error")
     finally:
         _scheduled_jobs.pop(job_id, None)
 
 
-def _do_schedule(client_id, client_secret, project_id, action, params, run_at_str, tz_str="Asia/Ho_Chi_Minh"):
+def _do_schedule(client_id, client_secret, project_id, action, params, run_at_str, tz_str="Asia/Ho_Chi_Minh", customer=""):
     """Internal schedule logic — callable without HTTP."""
     try:
         tz       = pytz.timezone(tz_str)
@@ -2075,20 +2292,26 @@ def _do_schedule(client_id, client_secret, project_id, action, params, run_at_st
             mins  = int((diff.total_seconds() % 3600) // 60)
             return {"ok": False, "error": f"Thời gian {run_time.strftime('%H:%M ngày %d/%m/%Y')} đã qua {hours}h{mins:02d}p rồi. Vui lòng chọn thời gian trong tương lai."}
 
+        action_label = {"vm_start": "khởi động", "vm_stop": "tắt", "vm_reboot": "reboot"}.get(action, action)
+        server_name  = params.get("serverName", "VM")
+        desc = f"{action_label} VM {server_name} lúc {run_time.strftime('%H:%M %d/%m/%Y')}"
         job_id = f"{action}_{params.get('serverId','')[:8]}_{run_time.strftime('%Y%m%d%H%M')}"
+        creds  = {"clientId": client_id, "clientSecret": client_secret, "projectId": project_id}
+
         _scheduled_jobs[job_id] = {
-            "desc":     f"{action} {params.get('serverName','')} lúc {run_time.strftime('%H:%M %d/%m/%Y')}",
+            "desc":     desc,
             "action":   action,
             "params":   params,
-            "creds":    {"clientId": client_id, "clientSecret": client_secret, "projectId": project_id},
+            "creds":    creds,
             "run_time": run_time.isoformat(),
+            "customer": customer,
         }
         scheduler.add_job(
             run_scheduled_job, trigger="date", run_date=run_time,
             args=[job_id], id=job_id, replace_existing=True,
         )
-        action_label = "khởi động" if action == "vm_start" else "tắt"
-        server_name  = params.get("serverName", "VM")
+        # Persist to DB
+        db_write_schedule(job_id, customer, project_id, action, params, creds, run_time.isoformat(), desc)
         return {
             "ok":      True,
             "message": f"✅ Đã hẹn {action_label} VM **{server_name}** lúc {run_time.strftime('%H:%M ngày %d/%m/%Y')}",
@@ -2644,6 +2867,160 @@ def verify_token():
     if valid:
         session["admin_logged_in"] = True
     return jsonify({"ok": valid})
+
+# ── Audit Log API ─────────────────────────────────────────────────────────────
+@app.route("/api/audit", methods=["GET"])
+@admin_required
+def get_audit_log():
+    customer = request.args.get("customer", "")
+    limit    = int(request.args.get("limit", 100))
+    logs     = db_get_audit(customer or None, limit)
+    return jsonify({"logs": logs})
+
+# ── Notifications API ─────────────────────────────────────────────────────────
+@app.route("/api/notifications", methods=["GET"])
+@admin_required
+def get_notifications():
+    customer     = request.args.get("customer", "")
+    unread_only  = request.args.get("unread", "false").lower() == "true"
+    if not customer:
+        return jsonify({"notifications": [], "unread": 0})
+    notifs = db_get_notifications(customer, unread_only)
+    unread = sum(1 for n in db_get_notifications(customer) if not n.get("read"))
+    return jsonify({"notifications": notifs, "unread": unread})
+
+@app.route("/api/notifications/read", methods=["POST"])
+@admin_required
+def mark_notifications_read():
+    body     = request.get_json() or {}
+    customer = body.get("customer", "")
+    if customer:
+        db_mark_notifications_read(customer)
+    return jsonify({"ok": True})
+
+# ── Schedule management API ────────────────────────────────────────────────────
+@app.route("/api/schedules", methods=["GET"])
+@admin_required
+def list_schedules_v2():
+    """List all scheduled jobs from DB (includes history)."""
+    customer = request.args.get("customer", "")
+    conn = get_conn(); cur = conn.cursor()
+    if customer:
+        cur.execute(f"SELECT * FROM scheduled_jobs WHERE customer={_PH} ORDER BY run_time DESC LIMIT 100", (customer,))
+    else:
+        cur.execute("SELECT * FROM scheduled_jobs ORDER BY run_time DESC LIMIT 200")
+    cols = [d[0] for d in cur.description]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    conn.close()
+    # Add in-memory pending flag
+    for r in rows:
+        r['in_memory'] = r['job_id'] in _scheduled_jobs
+    return jsonify({"schedules": rows})
+
+@app.route("/api/schedules/<job_id>", methods=["DELETE"])
+@admin_required
+def cancel_schedule_v2(job_id):
+    if job_id in _scheduled_jobs:
+        try: scheduler.remove_job(job_id)
+        except: pass
+        _scheduled_jobs.pop(job_id, None)
+    db_update_schedule_status(job_id, 'cancelled', 'Cancelled by admin')
+    return jsonify({"ok": True, "message": "Đã hủy lịch hẹn"})
+
+# ── Export API ────────────────────────────────────────────────────────────────
+@app.route("/api/export", methods=["POST"])
+@admin_required
+def export_resources():
+    """Export infrastructure summary as JSON or CSV."""
+    body          = request.get_json() or {}
+    customer_name = body.get("customerName", "")
+    fmt           = body.get("format", "json")  # json | csv
+
+    cust = get_customer(customer_name) if customer_name else None
+    if not cust:
+        return jsonify({"error": "Không tìm thấy khách hàng"}), 404
+
+    try:
+        token, user_info = fetch_gn_token(cust["client_id"], cust["client_secret"])
+        uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
+        P   = cust["project_id"]
+
+        sv, dv = gn_api(token, uid, "GET", f"v2/{P}/servers")
+        vms    = _parse_list(dv) if sv == 200 else []
+        sv2, dv2 = gn_api(token, uid, "GET", f"v2/{P}/volumes")
+        volumes  = _parse_list(dv2) if sv2 == 200 else []
+
+        report = {
+            "customer":   customer_name,
+            "project_id": P,
+            "exported_at": datetime.now().isoformat(),
+            "summary": {
+                "total_vms":    len(vms),
+                "active_vms":   sum(1 for v in vms if v.get("status") == "ACTIVE"),
+                "shutoff_vms":  sum(1 for v in vms if v.get("status") == "SHUTOFF"),
+                "total_volumes": len(volumes),
+                "attached_volumes": sum(1 for v in volumes if v.get("status") == "IN-USE"),
+                "free_volumes":     sum(1 for v in volumes if v.get("status") == "AVAILABLE"),
+                "total_disk_gb":    sum(v.get("size", 0) for v in volumes),
+            },
+            "vms": [{
+                "name":   v.get("name"),
+                "id":     v.get("uuid"),
+                "status": v.get("status"),
+                "flavor": v.get("flavor", {}).get("name") or v.get("flavorName"),
+                "zone":   v.get("zone", {}).get("name") if isinstance(v.get("zone"), dict) else v.get("zone"),
+                "created": v.get("createdAt") or v.get("created"),
+            } for v in vms],
+            "volumes": [{
+                "name":   v.get("name"),
+                "id":     v.get("uuid"),
+                "status": v.get("status"),
+                "size_gb": v.get("size"),
+                "type":   v.get("volumeTypeName") or v.get("volumeType", {}).get("name") if isinstance(v.get("volumeType"), dict) else v.get("volumeType"),
+            } for v in volumes],
+        }
+
+        if fmt == "csv":
+            import csv, io
+            out = io.StringIO()
+            w = csv.writer(out)
+            w.writerow(["Type","Name","ID","Status","Detail","Zone/Size"])
+            for v in report["vms"]:
+                w.writerow(["VM", v["name"], v["id"], v["status"], v["flavor"], v["zone"]])
+            for v in report["volumes"]:
+                w.writerow(["Volume", v["name"], v["id"], v["status"], v["type"], f"{v['size_gb']}GB"])
+            from flask import Response
+            return Response(out.getvalue(), mimetype="text/csv",
+                headers={"Content-Disposition": f"attachment;filename={customer_name}_export.csv"})
+
+        return jsonify(report)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ── Health Alert (background check) ──────────────────────────────────────────
+def _run_health_alerts():
+    """Check all customers for SHUTOFF/ERROR VMs and create notifications."""
+    customers = get_all_customers()
+    for cust in customers:
+        try:
+            token, user_info = fetch_gn_token(cust["client_id"], cust["client_secret"])
+            uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
+            P   = cust["project_id"]
+            sv, dv = gn_api(token, uid, "GET", f"v2/{P}/servers")
+            vms = _parse_list(dv) if sv == 200 else []
+            shutoff = [v for v in vms if v.get("status") in ("SHUTOFF", "ERROR")]
+            if shutoff:
+                names = ", ".join(v.get("name","?") for v in shutoff[:5])
+                db_write_notification(cust["name"],
+                    f"⚠️ {len(shutoff)} VM không hoạt động",
+                    f"Các VM đang SHUTOFF/ERROR: {names}",
+                    ntype="warning")
+        except Exception as e:
+            print(f"[HEALTH_ALERT] {cust['name']}: {e}")
+
+# Schedule health alert every 30 minutes
+scheduler.add_job(_run_health_alerts, trigger="interval", minutes=30,
+                  id="health_alerts", replace_existing=True)
 
 # ── Serve static chatbot UI ───────────────────────────────────────────────────
 @app.route("/")
