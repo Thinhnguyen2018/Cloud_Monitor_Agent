@@ -572,8 +572,15 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
                 return ("schedule_unknown", None, "Bạn muốn hẹn lịch cho VM nào?")
 
     # ── Immediate actions (only if no schedule keyword) ──────────────────────
+    # Guard: nếu là câu hỏi (có "nào", "đang", "?", "liệt", "list", "xem") → không trigger action
+    _is_query = any(w in msg for w in ["nào", "đang", "?", "liệt", "list", "xem", "bao nhiêu", "tất cả", "danh sách", "show", "status", "trạng thái"])
+
     # "tóm tắt" should NOT trigger vm_stop — check it's not part of "tóm tắt"
-    has_stop = any(w in msg for w in ["stop", "dừng", "shut", "shutdown"]) or                ("tắt" in msg and "tóm tắt" not in msg and "tóm" not in msg)
+    has_stop = (not _is_query) and (
+        any(w in msg for w in ["stop", "dừng", "shutdown"]) or
+        ("shut" in msg and "shutoff" not in msg) or
+        ("tắt" in msg and "tóm tắt" not in msg and "tóm" not in msg)
+    )
     if has_stop:
         if any(w in msg for w in ["vm", "server", "máy"]) or find_vm(msg):
             vm = find_vm(msg)
@@ -582,7 +589,10 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
                         f"Dừng VM **{vm.get('name')}** (ACTIVE → SHUTOFF)")
             return ("vm_stop", None, "Bạn muốn dừng VM nào?")
 
-    has_start = any(w in msg for w in ["start", "khởi động", "turn on"]) or                 (any(w in msg for w in ["bật", "mở"]) and not any(w in msg for w in SCHEDULE_KEYWORDS))
+    has_start = (not _is_query) and (
+        any(w in msg for w in ["start", "khởi động", "turn on"]) or
+        (any(w in msg for w in ["bật", "mở"]) and not any(w in msg for w in SCHEDULE_KEYWORDS))
+    )
     if has_start:
         if any(w in msg for w in ["vm", "server", "máy"]) or find_vm(msg):
             vm = find_vm(msg)
