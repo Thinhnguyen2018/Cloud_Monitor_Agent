@@ -423,9 +423,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
     <span class="audit-chip active" data-filter="">Tất cả</span>
     <span class="audit-chip" data-filter="success">✅ Thành công</span>
     <span class="audit-chip" data-filter="failed">❌ Thất bại</span>
-    <span class="audit-chip" data-filter="vm_create">Tạo VM</span>
-    <span class="audit-chip" data-filter="vm_delete">Xóa VM</span>
-    <span class="audit-chip" data-filter="volume">Volume</span>
   </div>
   <div id="audit-body"><div style="color:#aaa;text-align:center;padding:24px;font-size:13px">Chọn khách hàng để xem lịch sử</div></div>
 </div>
@@ -974,8 +971,6 @@ function renderAuditLog() {
   let logs = auditAllLogs;
   if (auditFilter === 'success') logs = logs.filter(l => l.status === 'success');
   else if (auditFilter === 'failed') logs = logs.filter(l => l.status === 'failed');
-  else if (auditFilter === 'volume') logs = logs.filter(l => l.action.startsWith('volume'));
-  else if (auditFilter) logs = logs.filter(l => l.action === auditFilter);
 
   if (!logs.length) { body.innerHTML = '<div style="color:#aaa;text-align:center;padding:24px;font-size:13px">Không có dữ liệu</div>'; return; }
   body.innerHTML = logs.map(l => `
