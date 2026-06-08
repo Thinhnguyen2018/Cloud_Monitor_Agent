@@ -112,6 +112,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
 #send-btn{width:42px;height:42px;border-radius:50%;border:none;background:#185fa5;color:#fff;cursor:pointer;font-size:17px;flex-shrink:0}
 #send-btn:hover{background:#0c447c}
 #send-btn:disabled{background:#bbb;cursor:default}
+#cmd-btn{width:36px;height:36px;border-radius:50%;border:1px solid #ddd;background:#fff;color:#555;cursor:pointer;font-size:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s}
+#cmd-btn:hover{background:#e6f1fb;border-color:#85b7eb;color:#185fa5}
+#cmd-btn:disabled{opacity:.4;cursor:default}
+
+/* ── Command palette ──────────────────────────────── */
+#cmd-palette{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);width:min(640px,96vw);background:#fff;border:1px solid #e0e0d8;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.14);z-index:500;display:none;flex-direction:column;max-height:72vh;overflow:hidden}
+#cmd-palette.open{display:flex}
+#cmd-palette-hd{padding:12px 16px 10px;border-bottom:1px solid #f0f0e8;display:flex;align-items:center;gap:8px;flex-shrink:0}
+#cmd-search{flex:1;border:1px solid #e0e0d8;border-radius:22px;padding:6px 14px;font-size:13px;font-family:inherit;outline:none}
+#cmd-search:focus{border-color:#378add}
+#cmd-close{background:none;border:none;font-size:18px;color:#999;cursor:pointer;line-height:1;padding:0 2px}
+#cmd-close:hover{color:#333}
+#cmd-body{overflow-y:auto;padding:10px 12px 14px}
+.cmd-group{margin-bottom:12px}
+.cmd-group-title{font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.08em;padding:0 6px;margin-bottom:6px}
+.cmd-list{display:flex;flex-direction:column;gap:2px}
+.cmd-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;cursor:pointer;border:1px solid transparent;transition:all .12s}
+.cmd-item:hover{background:#f0f6ff;border-color:#cde0f8}
+.cmd-icon{font-size:16px;width:24px;text-align:center;flex-shrink:0}
+.cmd-label{flex:1;font-size:13px;color:#1a1a1a;font-weight:500}
+.cmd-desc{font-size:11.5px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.cmd-item.hidden{display:none}
 
 /* ── Modal ───────────────────────────────────────── */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
@@ -301,11 +323,106 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
       <span class="sug" data-q="Xem lịch hẹn hiện tại">📅 Lịch hẹn</span>
     </div>
     <div id="input-row">
-      <textarea id="user-input" placeholder="Hỏi về hạ tầng của khách hàng..." disabled></textarea>
+      <button id="cmd-btn" disabled title="Lệnh có sẵn (/)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+      </button>
+      <textarea id="user-input" placeholder="Hỏi về hạ tầng hoặc nhấn nút lệnh bên trái..." disabled></textarea>
       <button id="send-btn" disabled>➤</button>
     </div>
   </div>
 
+</div>
+
+<!-- Command Palette -->
+<div id="cmd-palette">
+  <div id="cmd-palette-hd">
+    <span style="font-size:13px;font-weight:500;color:#333">⚡ Lệnh có sẵn</span>
+    <input id="cmd-search" placeholder="Tìm lệnh..." autocomplete="off"/>
+    <button id="cmd-close">✕</button>
+  </div>
+  <div id="cmd-body">
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">🔍 Xem & Giám sát</div>
+      <div class="cmd-list">
+        <div class="cmd-item" data-q="Liệt kê tất cả VM và trạng thái hiện tại"><span class="cmd-icon">🖥️</span><span class="cmd-label">Liệt kê VM</span><span class="cmd-desc">Xem tất cả máy ảo và trạng thái</span></div>
+        <div class="cmd-item" data-q="Liệt kê tất cả volume"><span class="cmd-icon">💾</span><span class="cmd-label">Liệt kê Volume</span><span class="cmd-desc">Xem danh sách ổ đĩa</span></div>
+        <div class="cmd-item" data-q="Liệt kê tất cả security group"><span class="cmd-icon">🛡️</span><span class="cmd-label">Liệt kê Security Group</span><span class="cmd-desc">Xem các SG và rules</span></div>
+        <div class="cmd-item" data-q="Liệt kê ssh key"><span class="cmd-icon">🔑</span><span class="cmd-label">Liệt kê SSH Key</span><span class="cmd-desc">Xem danh sách SSH Key Pairs</span></div>
+        <div class="cmd-item" data-q="Tóm tắt toàn bộ hạ tầng của tôi"><span class="cmd-icon">📋</span><span class="cmd-label">Tóm tắt hạ tầng</span><span class="cmd-desc">Tổng quan toàn bộ resources</span></div>
+        <div class="cmd-item" data-q="Kiểm tra health toàn bộ server"><span class="cmd-icon">❤️</span><span class="cmd-label">Health check</span><span class="cmd-desc">VM nào đang lỗi / tắt</span></div>
+        <div class="cmd-item" data-q="Phát hiện orphan resources"><span class="cmd-icon">⚠️</span><span class="cmd-label">Orphan resources</span><span class="cmd-desc">Volume chưa gắn, FIP idle...</span></div>
+        <div class="cmd-item" data-q="Audit security group tìm rule nguy hiểm"><span class="cmd-icon">🚨</span><span class="cmd-label">Security audit</span><span class="cmd-desc">Tìm rule mở 0.0.0.0/0</span></div>
+        <div class="cmd-item" data-q="Xem quota và hạn mức tài nguyên"><span class="cmd-icon">📊</span><span class="cmd-label">Quota usage</span><span class="cmd-desc">Hạn mức tài nguyên đang dùng</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">🖥️ Quản lý VM</div>
+      <div class="cmd-list">
+        <div class="cmd-item" data-q="tạo vm tên "><span class="cmd-icon">➕</span><span class="cmd-label">Tạo VM mới</span><span class="cmd-desc">tạo vm tên [tên] ubuntu 22.04 2vcpu 4gb</span></div>
+        <div class="cmd-item" data-q="start vm "><span class="cmd-icon">▶️</span><span class="cmd-label">Start VM</span><span class="cmd-desc">Khởi động máy ảo</span></div>
+        <div class="cmd-item" data-q="stop vm "><span class="cmd-icon">⏹️</span><span class="cmd-label">Stop VM</span><span class="cmd-desc">Dừng máy ảo</span></div>
+        <div class="cmd-item" data-q="reboot vm "><span class="cmd-icon">🔄</span><span class="cmd-label">Reboot VM</span><span class="cmd-desc">Khởi động lại máy ảo</span></div>
+        <div class="cmd-item" data-q="resize vm  sang "><span class="cmd-icon">⬆️</span><span class="cmd-label">Resize VM</span><span class="cmd-desc">Đổi flavor (nâng/hạ cấu hình)</span></div>
+        <div class="cmd-item" data-q="tạo snapshot vm "><span class="cmd-icon">📸</span><span class="cmd-label">Snapshot VM</span><span class="cmd-desc">Tạo bản sao lưu VM</span></div>
+        <div class="cmd-item" data-q="đổi tên vm  thành "><span class="cmd-icon">✏️</span><span class="cmd-label">Đổi tên VM</span><span class="cmd-desc">Rename máy ảo</span></div>
+        <div class="cmd-item" data-q="xóa vm "><span class="cmd-icon">🗑️</span><span class="cmd-label">Xóa VM</span><span class="cmd-desc">⚠️ Không thể khôi phục</span></div>
+        <div class="cmd-item" data-q="liệt kê flavor"><span class="cmd-icon">📐</span><span class="cmd-label">Xem Flavor</span><span class="cmd-desc">Danh sách cấu hình phần cứng</span></div>
+        <div class="cmd-item" data-q="liệt kê image"><span class="cmd-icon">🗂️</span><span class="cmd-label">Xem Image</span><span class="cmd-desc">Danh sách OS/image khả dụng</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">💾 Quản lý Volume</div>
+      <div class="cmd-list">
+        <div class="cmd-item" data-q="tạo volume  20gb"><span class="cmd-icon">➕</span><span class="cmd-label">Tạo Volume</span><span class="cmd-desc">tạo volume [tên] [size]gb</span></div>
+        <div class="cmd-item" data-q="gắn volume  vào vm "><span class="cmd-icon">🔗</span><span class="cmd-label">Gắn Volume vào VM</span><span class="cmd-desc">Attach volume vào máy ảo</span></div>
+        <div class="cmd-item" data-q="gỡ volume  khỏi vm "><span class="cmd-icon">🔓</span><span class="cmd-label">Gỡ Volume khỏi VM</span><span class="cmd-desc">Detach volume</span></div>
+        <div class="cmd-item" data-q="tăng dung lượng volume  lên 100gb"><span class="cmd-icon">📈</span><span class="cmd-label">Resize Volume</span><span class="cmd-desc">Tăng dung lượng ổ đĩa</span></div>
+        <div class="cmd-item" data-q="đổi tên volume  thành "><span class="cmd-icon">✏️</span><span class="cmd-label">Đổi tên Volume</span><span class="cmd-desc">Rename ổ đĩa</span></div>
+        <div class="cmd-item" data-q="xóa volume "><span class="cmd-icon">🗑️</span><span class="cmd-label">Xóa Volume</span><span class="cmd-desc">⚠️ Không thể khôi phục</span></div>
+        <div class="cmd-item" data-q="liệt kê volume type"><span class="cmd-icon">🗄️</span><span class="cmd-label">Xem Volume Type</span><span class="cmd-desc">Danh sách loại storage (SSD, NVMe...)</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">🔑 SSH Key</div>
+      <div class="cmd-list">
+        <div class="cmd-item" data-q="tạo ssh key tên "><span class="cmd-icon">➕</span><span class="cmd-label">Tạo SSH Key</span><span class="cmd-desc">tạo ssh key tên [tên-key]</span></div>
+        <div class="cmd-item" data-q="xóa ssh key "><span class="cmd-icon">🗑️</span><span class="cmd-label">Xóa SSH Key</span><span class="cmd-desc">Xóa key pair</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">🌐 Floating IP & Network</div>
+      <div class="cmd-list">
+        <div class="cmd-item" data-q="gắn floating ip  vào vm "><span class="cmd-icon">🌐</span><span class="cmd-label">Gắn Floating IP</span><span class="cmd-desc">Associate IP công khai vào VM</span></div>
+        <div class="cmd-item" data-q="gỡ floating ip khỏi vm "><span class="cmd-icon">🔌</span><span class="cmd-label">Gỡ Floating IP</span><span class="cmd-desc">Disassociate IP công khai</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">🛡️ Security Group</div>
+      <div class="cmd-list">
+        <div class="cmd-item" data-q="gắn security group vào vm "><span class="cmd-icon">➕</span><span class="cmd-label">Gắn Security Group</span><span class="cmd-desc">Attach SG vào VM</span></div>
+        <div class="cmd-item" data-q="gỡ security group khỏi vm "><span class="cmd-icon">➖</span><span class="cmd-label">Gỡ Security Group</span><span class="cmd-desc">Detach SG khỏi VM</span></div>
+        <div class="cmd-item" data-q="xem rule security group "><span class="cmd-icon">📋</span><span class="cmd-label">Xem SG Rules</span><span class="cmd-desc">Liệt kê rules của SG</span></div>
+        <div class="cmd-item" data-q="mở port 80 tcp cho security group "><span class="cmd-icon">🔓</span><span class="cmd-label">Thêm SG Rule</span><span class="cmd-desc">Mở port trong Security Group</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">📅 Lịch hẹn tự động</div>
+      <div class="cmd-list">
+        <div class="cmd-item" data-q="Xem lịch hẹn hiện tại"><span class="cmd-icon">📅</span><span class="cmd-label">Xem lịch hẹn</span><span class="cmd-desc">Danh sách tác vụ đã hẹn</span></div>
+        <div class="cmd-item" data-q="hẹn start vm  lúc 8:00 sáng"><span class="cmd-icon">⏰</span><span class="cmd-label">Hẹn Start VM</span><span class="cmd-desc">Tự động bật VM theo giờ</span></div>
+        <div class="cmd-item" data-q="hẹn stop vm  lúc 22:00"><span class="cmd-icon">🕙</span><span class="cmd-label">Hẹn Stop VM</span><span class="cmd-desc">Tự động tắt VM theo giờ</span></div>
+        <div class="cmd-item" data-q="hủy lịch hẹn"><span class="cmd-icon">❌</span><span class="cmd-label">Hủy lịch hẹn</span><span class="cmd-desc">Xóa tác vụ đã đặt</span></div>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 <!-- Add customer modal -->
@@ -419,6 +536,7 @@ async function selectCustomer(name) {
   document.getElementById('conn-badge').className   = 'ok';
   document.getElementById('user-input').disabled    = false;
   document.getElementById('send-btn').disabled      = false;
+  document.getElementById('cmd-btn').disabled       = false;
   document.getElementById('sugs').style.display     = 'flex';
 
   document.getElementById('info-panel').style.display  = 'none';
@@ -459,6 +577,7 @@ function showInfoPanel() {
   document.getElementById('conn-badge').className      = '';
   document.getElementById('user-input').disabled       = true;
   document.getElementById('send-btn').disabled         = true;
+  document.getElementById('cmd-btn').disabled          = true;
   document.getElementById('sugs').style.display        = 'none';
   renderSidebar();
 }
@@ -674,6 +793,73 @@ document.querySelectorAll('.sug').forEach(el => {
 });
 
 loadCustomers();
+
+// ── Command Palette ───────────────────────────────────────────────────────────
+const palette   = document.getElementById('cmd-palette');
+const cmdSearch = document.getElementById('cmd-search');
+const cmdBtn    = document.getElementById('cmd-btn');
+const cmdClose  = document.getElementById('cmd-close');
+
+function openPalette() {
+  palette.classList.add('open');
+  cmdSearch.value = '';
+  filterCmds('');
+  cmdSearch.focus();
+}
+function closePalette() {
+  palette.classList.remove('open');
+}
+
+cmdBtn.addEventListener('click', (e) => { e.stopPropagation(); openPalette(); });
+cmdClose.addEventListener('click', closePalette);
+
+// Click outside to close
+document.addEventListener('click', (e) => {
+  if (palette.classList.contains('open') && !palette.contains(e.target)) closePalette();
+});
+
+// "/" shortcut in input opens palette
+document.getElementById('user-input').addEventListener('keydown', (e) => {
+  if (e.key === '/' && e.target.value === '') { e.preventDefault(); openPalette(); }
+  if (e.key === 'Escape') closePalette();
+});
+
+// Search filter
+cmdSearch.addEventListener('input', () => filterCmds(cmdSearch.value.toLowerCase()));
+cmdSearch.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closePalette();
+  if (e.key === 'Enter') {
+    const first = document.querySelector('.cmd-item:not(.hidden)');
+    if (first) pickCmd(first.dataset.q);
+  }
+});
+
+function filterCmds(q) {
+  document.querySelectorAll('.cmd-item').forEach(el => {
+    const text = (el.querySelector('.cmd-label').textContent + ' ' + el.querySelector('.cmd-desc').textContent).toLowerCase();
+    el.classList.toggle('hidden', q && !text.includes(q));
+  });
+  // Hide empty group headers
+  document.querySelectorAll('.cmd-group').forEach(g => {
+    const visible = g.querySelectorAll('.cmd-item:not(.hidden)').length;
+    g.style.display = visible ? '' : 'none';
+  });
+}
+
+function pickCmd(q) {
+  const inp = document.getElementById('user-input');
+  inp.value = q;
+  inp.focus();
+  // Place cursor at end
+  inp.setSelectionRange(q.length, q.length);
+  closePalette();
+  // If query doesn't end in space (complete command), send immediately
+  if (q && !q.endsWith(' ')) send();
+}
+
+document.querySelectorAll('.cmd-item').forEach(el => {
+  el.addEventListener('click', () => pickCmd(el.dataset.q));
+});
 </script>
 </body>
 </html>
