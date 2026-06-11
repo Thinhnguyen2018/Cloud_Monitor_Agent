@@ -3011,6 +3011,119 @@ def index():
     return send_from_directory("static", "index.html")
 
 
+@app.route("/dashboard")
+@admin_required
+def dashboard_page():
+    return send_from_directory("static", "dashboard.html")
+
+
+@app.route("/api/dashboard/stats", methods=["GET"])
+@admin_required
+def dashboard_stats():
+    """Aggregate stats for the monitoring dashboard."""
+    conn = get_conn(); cur = conn.cursor()
+
+    # ── Audit stats: last 7 days by day ──────────────────────────────────────
+    cur.execute("""
+        SELECT date(created_at) as day, status, COUNT(*) as cnt
+        FROM audit_log
+        WHERE created_at >= date('now', '-6 days')
+        GROUP BY day, status
+        ORDER BY day
+    """)
+    audit_rows = cur.fetchall()
+
+    days_map = {}
+    for row in audit_rows:
+        day, status, cnt = row[0], row[1], row[2]
+        if day not in days_map:
+            days_map[day] = {"success": 0, "failed": 0}
+        if status == "success":
+            days_map[day]["success"] += cnt
+        else:
+            days_map[day]["failed"] += cnt
+
+    # Fill missing days
+    from datetime import date, timedelta
+    today = date.today()
+    audit_by_day = []
+    for i in range(6, -1, -1):
+        d = (today - timedelta(days=i)).isoformat()
+        v = days_map.get(d, {"success": 0, "failed": 0})
+        audit_by_day.append({"day": d, **v})
+
+    # ── Top actions ───────────────────────────────────────────────────────────
+    cur.execute("""
+        SELECT action, COUNT(*) as cnt FROM audit_log
+        GROUP BY action ORDER BY cnt DESC LIMIT 8
+    """)
+    top_actions = [{"action": r[0], "count": r[1]} for r in cur.fetchall()]
+
+    # ── Total counts ─────────────────────────────────────────────────────────
+    cur.execute("SELECT COUNT(*) FROM audit_log")
+    total_actions = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM audit_log WHERE status='success'")
+    total_success = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM audit_log WHERE status='failed'")
+    total_failed = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM audit_log WHERE date(created_at)=date('now')")
+    today_actions = cur.fetchone()[0]
+
+    # ── Schedules overview ────────────────────────────────────────────────────
+    cur.execute("SELECT status, COUNT(*) FROM scheduled_jobs GROUP BY status")
+    sched_rows = cur.fetchall()
+    sched_stats = {r[0]: r[1] for r in sched_rows}
+
+    cur.execute("""
+        SELECT customer, action, run_time FROM scheduled_jobs
+        WHERE status='pending' ORDER BY run_time ASC LIMIT 5
+    """)
+    upcoming = [{"customer": r[0], "action": r[1], "run_time": r[2]} for r in cur.fetchall()]
+
+    # ── Customers count ───────────────────────────────────────────────────────
+    cur.execute("SELECT COUNT(*) FROM customers")
+    total_customers = cur.fetchone()[0]
+
+    # ── Per-customer action count ─────────────────────────────────────────────
+    cur.execute("""
+        SELECT customer, COUNT(*) as cnt FROM audit_log
+        GROUP BY customer ORDER BY cnt DESC LIMIT 10
+    """)
+    per_customer = [{"customer": r[0], "count": r[1]} for r in cur.fetchall()]
+
+    # ── Recent audit entries ──────────────────────────────────────────────────
+    cur.execute("""
+        SELECT customer, action, resource, status, message, created_at
+        FROM audit_log ORDER BY created_at DESC LIMIT 10
+    """)
+    recent = [
+        {"customer": r[0], "action": r[1], "resource": r[2],
+         "status": r[3], "message": r[4], "created_at": r[5]}
+        for r in cur.fetchall()
+    ]
+
+    conn.close()
+
+    return jsonify({
+        "totals": {
+            "actions": total_actions,
+            "success": total_success,
+            "failed": total_failed,
+            "today": today_actions,
+            "customers": total_customers,
+        },
+        "audit_by_day": audit_by_day,
+        "top_actions": top_actions,
+        "schedule_stats": sched_stats,
+        "upcoming_schedules": upcoming,
+        "per_customer": per_customer,
+        "recent_audit": recent,
+    })
+
+
 
 @app.route("/health")
 def health():

@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GreenNode Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .header {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .header h1 { font-size: 17px; font-weight: 600; color: #f1f5f9; }
+    .header-sub { font-size: 12px; color: #64748b; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .back-btn {
+      padding: 6px 14px;
+      background: #1e2235;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      color: #94a3b8;
+      font-size: 13px;
+      text-decoration: none;
+      transition: all .15s;
+    }
+    .back-btn:hover { background: #252840; color: #e2e8f0; }
+    #last-updated { font-size: 12px; color: #475569; }
+    .refresh-btn {
+      padding: 6px 12px;
+      background: #6366f1;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .refresh-btn:hover { background: #4f46e5; }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    .container { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+
+    /* ── Stat cards ─────────────────────────────────────── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: transform .15s;
+    }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--accent, #6366f1);
+      border-radius: 12px 12px 0 0;
+    }
+    .stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .stat-value { font-size: 32px; font-weight: 700; color: #f1f5f9; line-height: 1; }
+    .stat-icon { position: absolute; top: 16px; right: 16px; font-size: 28px; opacity: .15; }
+
+    /* ── Section title ──────────────────────────────────── */
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 14px;
+    }
+
+    /* ── Chart grid ─────────────────────────────────────── */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .chart-grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .chart-card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .chart-card canvas { max-height: 220px; }
+
+    /* ── Table ──────────────────────────────────────────── */
+    .table-card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      color: #475569;
+      font-weight: 500;
+      border-bottom: 1px solid #2d3148;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid #1e2235; color: #cbd5e1; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1e2235; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-success { background: #14532d; color: #4ade80; }
+    .badge-failed  { background: #450a0a; color: #f87171; }
+    .badge-pending { background: #1e3a5f; color: #60a5fa; }
+
+    /* ── Upcoming schedules ─────────────────────────────── */
+    .sched-list { list-style: none; }
+    .sched-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid #1e2235;
+    }
+    .sched-item:last-child { border-bottom: none; }
+    .sched-dot { width: 8px; height: 8px; border-radius: 50%; background: #6366f1; flex-shrink: 0; }
+    .sched-info { flex: 1; }
+    .sched-action { font-size: 13px; color: #e2e8f0; font-weight: 500; }
+    .sched-meta { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+    /* ── Loading overlay ────────────────────────────────── */
+    #loading {
+      position: fixed; inset: 0;
+      background: #0f1117cc;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #2d3148;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive ─────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .chart-grid { grid-template-columns: 1fr; }
+      .chart-grid-3 { grid-template-columns: 1fr; }
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 480px) {
+      .container { padding: 16px; }
+      .header { padding: 12px 16px; }
+      .stat-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .stat-value { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading"><div class="spinner"></div></div>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">📊</div>
+    <div>
+      <div class="header h1" style="font-size:17px;font-weight:600;color:#f1f5f9;">GreenNode Monitor</div>
+      <div class="header-sub">Monitoring Dashboard</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span id="last-updated">Đang tải...</span>
+    <button class="refresh-btn" onclick="loadStats()">↺ Refresh</button>
+    <a href="/" class="back-btn">← Admin</a>
+  </div>
+</div>
+
+<!-- Main content -->
+<div class="container">
+
+  <!-- Stat Cards -->
+  <div class="stat-grid">
+    <div class="stat-card" style="--accent:#6366f1">
+      <div class="stat-label">Tổng hành động</div>
+      <div class="stat-value" id="s-total">—</div>
+      <div class="stat-icon">⚡</div>
+    </div>
+    <div class="stat-card" style="--accent:#22c55e">
+      <div class="stat-label">Thành công</div>
+      <div class="stat-value" id="s-success">—</div>
+      <div class="stat-icon">✅</div>
+    </div>
+    <div class="stat-card" style="--accent:#ef4444">
+      <div class="stat-label">Thất bại</div>
+      <div class="stat-value" id="s-failed">—</div>
+      <div class="stat-icon">❌</div>
+    </div>
+    <div class="stat-card" style="--accent:#f59e0b">
+      <div class="stat-label">Hôm nay</div>
+      <div class="stat-value" id="s-today">—</div>
+      <div class="stat-icon">📅</div>
+    </div>
+    <div class="stat-card" style="--accent:#8b5cf6">
+      <div class="stat-label">Khách hàng</div>
+      <div class="stat-value" id="s-customers">—</div>
+      <div class="stat-icon">👤</div>
+    </div>
+  </div>
+
+  <!-- Charts row 1: Activity + Donut -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="section-title">Hoạt động 7 ngày gần nhất</div>
+      <canvas id="chart-activity"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="section-title">Tỉ lệ thành công</div>
+      <canvas id="chart-donut"></canvas>
+    </div>
+  </div>
+
+  <!-- Charts row 2: Top actions + Per customer + Schedule status -->
+  <div class="chart-grid-3">
+    <div class="chart-card">
+      <div class="section-title">Top hành động</div>
+      <canvas id="chart-actions"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="section-title">Theo khách hàng</div>
+      <canvas id="chart-customers"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="section-title">Trạng thái lịch hẹn</div>
+      <canvas id="chart-schedules"></canvas>
+    </div>
+  </div>
+
+  <!-- Upcoming schedules + Recent activity -->
+  <div class="chart-grid">
+    <div class="table-card">
+      <div class="section-title">Hành động gần đây</div>
+      <table id="recent-table">
+        <thead>
+          <tr>
+            <th>Khách hàng</th>
+            <th>Hành động</th>
+            <th>Resource</th>
+            <th>Trạng thái</th>
+            <th>Thời gian</th>
+          </tr>
+        </thead>
+        <tbody id="recent-tbody"></tbody>
+      </table>
+    </div>
+    <div class="chart-card">
+      <div class="section-title">Lịch hẹn sắp tới</div>
+      <ul class="sched-list" id="sched-list"></ul>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── Chart instances (kept for destroy on refresh) ─────────────────────────
+  let charts = {};
+
+  function destroyChart(id) {
+    if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  }
+
+  // ── Chart defaults ────────────────────────────────────────────────────────
+  Chart.defaults.color = '#64748b';
+  Chart.defaults.borderColor = '#2d3148';
+  Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+  Chart.defaults.font.size = 12;
+
+  const PALETTE = ['#6366f1','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16'];
+
+  // ── Main load ─────────────────────────────────────────────────────────────
+  async function loadStats() {
+    document.getElementById('loading').style.display = 'flex';
+    try {
+      const res = await fetch('/api/dashboard/stats');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      renderStats(data);
+      renderActivityChart(data.audit_by_day);
+      renderDonut(data.totals);
+      renderTopActions(data.top_actions);
+      renderPerCustomer(data.per_customer);
+      renderScheduleStatus(data.schedule_stats);
+      renderRecentTable(data.recent_audit);
+      renderUpcoming(data.upcoming_schedules);
+      const now = new Date().toLocaleTimeString('vi-VN');
+      document.getElementById('last-updated').textContent = 'Cập nhật lúc ' + now;
+    } catch(e) {
+      document.getElementById('last-updated').textContent = 'Lỗi: ' + e.message;
+    } finally {
+      document.getElementById('loading').style.display = 'none';
+    }
+  }
+
+  function renderStats(data) {
+    const t = data.totals;
+    document.getElementById('s-total').textContent     = t.actions.toLocaleString();
+    document.getElementById('s-success').textContent   = t.success.toLocaleString();
+    document.getElementById('s-failed').textContent    = t.failed.toLocaleString();
+    document.getElementById('s-today').textContent     = t.today.toLocaleString();
+    document.getElementById('s-customers').textContent = t.customers.toLocaleString();
+  }
+
+  function renderActivityChart(days) {
+    destroyChart('activity');
+    const labels = days.map(d => {
+      const dt = new Date(d.day + 'T00:00:00');
+      return dt.toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit'});
+    });
+    charts['activity'] = new Chart(document.getElementById('chart-activity'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Thành công',
+            data: days.map(d => d.success),
+            backgroundColor: '#22c55e88',
+            borderColor: '#22c55e',
+            borderWidth: 2,
+            borderRadius: 4,
+          },
+          {
+            label: 'Thất bại',
+            data: days.map(d => d.failed),
+            backgroundColor: '#ef444488',
+            borderColor: '#ef4444',
+            borderWidth: 2,
+            borderRadius: 4,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          x: { grid: { color: '#1e2235' } },
+          y: { grid: { color: '#1e2235' }, beginAtZero: true, ticks: { precision: 0 } }
+        }
+      }
+    });
+  }
+
+  function renderDonut(totals) {
+    destroyChart('donut');
+    const success = totals.success;
+    const failed  = totals.failed;
+    const neither = totals.actions - success - failed;
+    charts['donut'] = new Chart(document.getElementById('chart-donut'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Thành công', 'Thất bại', 'Khác'],
+        datasets: [{
+          data: [success, failed, Math.max(0, neither)],
+          backgroundColor: ['#22c55e','#ef4444','#6366f1'],
+          borderColor: '#1a1d27',
+          borderWidth: 3,
+          hoverOffset: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+                const pct = total ? ((ctx.parsed / total)*100).toFixed(1) : 0;
+                return ` ${ctx.label}: ${ctx.parsed} (${pct}%)`;
+              }
+            }
+          }
+        },
+        cutout: '65%',
+      }
+    });
+  }
+
+  function renderTopActions(actions) {
+    destroyChart('actions');
+    charts['actions'] = new Chart(document.getElementById('chart-actions'), {
+      type: 'bar',
+      data: {
+        labels: actions.map(a => a.action),
+        datasets: [{
+          label: 'Số lần',
+          data: actions.map(a => a.count),
+          backgroundColor: PALETTE,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#1e2235' }, beginAtZero: true, ticks: { precision: 0 } },
+          y: { grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  function renderPerCustomer(list) {
+    destroyChart('customers');
+    charts['customers'] = new Chart(document.getElementById('chart-customers'), {
+      type: 'bar',
+      data: {
+        labels: list.map(c => c.customer || 'N/A'),
+        datasets: [{
+          label: 'Hành động',
+          data: list.map(c => c.count),
+          backgroundColor: PALETTE,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#1e2235' }, beginAtZero: true, ticks: { precision: 0 } },
+          y: { grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  function renderScheduleStatus(stats) {
+    destroyChart('schedules');
+    const labels = Object.keys(stats);
+    const data   = Object.values(stats);
+    const colors = { pending:'#6366f1', done:'#22c55e', failed:'#ef4444', cancelled:'#64748b' };
+    charts['schedules'] = new Chart(document.getElementById('chart-schedules'), {
+      type: 'pie',
+      data: {
+        labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+        datasets: [{
+          data,
+          backgroundColor: labels.map(l => colors[l] || '#8b5cf6'),
+          borderColor: '#1a1d27',
+          borderWidth: 3,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  function renderRecentTable(rows) {
+    const tbody = document.getElementById('recent-tbody');
+    if (!rows || !rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:#475569;text-align:center;padding:20px">Chưa có dữ liệu</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => {
+      const badge = r.status === 'success'
+        ? '<span class="badge badge-success">✅ OK</span>'
+        : '<span class="badge badge-failed">❌ Lỗi</span>';
+      const time = r.created_at ? r.created_at.replace('T',' ').split('.')[0] : '—';
+      const msg = (r.message || '').slice(0, 40) + ((r.message||'').length > 40 ? '…' : '');
+      return `<tr>
+        <td>${r.customer || '—'}</td>
+        <td><code style="color:#a78bfa;font-size:12px">${r.action || '—'}</code></td>
+        <td style="color:#94a3b8;font-size:12px">${msg || r.resource || '—'}</td>
+        <td>${badge}</td>
+        <td style="color:#475569;font-size:12px;white-space:nowrap">${time}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderUpcoming(list) {
+    const el = document.getElementById('sched-list');
+    if (!list || !list.length) {
+      el.innerHTML = '<li style="color:#475569;padding:16px 0;text-align:center">Không có lịch hẹn nào</li>';
+      return;
+    }
+    el.innerHTML = list.map(s => {
+      const dt = s.run_time ? s.run_time.replace('T',' ').split('.')[0] : '—';
+      return `<li class="sched-item">
+        <div class="sched-dot"></div>
+        <div class="sched-info">
+          <div class="sched-action">${s.action || '—'}</div>
+          <div class="sched-meta">${s.customer || '—'} · ${dt}</div>
+        </div>
+      </li>`;
+    }).join('');
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  loadStats();
+
+  // Auto-refresh every 2 minutes
+  setInterval(loadStats, 120_000);
+</script>
+</body>
+</html>
