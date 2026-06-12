@@ -181,6 +181,7 @@ def init_db():
                 body        TEXT NOT NULL,
                 type        TEXT DEFAULT 'info',
                 read        BOOLEAN DEFAULT FALSE,
+                resolved    BOOLEAN DEFAULT FALSE,
                 created_at  TIMESTAMP DEFAULT NOW()
             )
         """)
@@ -233,6 +234,7 @@ def init_db():
                 body        TEXT NOT NULL,
                 type        TEXT DEFAULT 'info',
                 read        INTEGER DEFAULT 0,
+                resolved    INTEGER DEFAULT 0,
                 created_at  TEXT DEFAULT (datetime('now','localtime'))
             )
         """)
@@ -2965,6 +2967,53 @@ def mark_notifications_read():
     if customer:
         db_mark_notifications_read(customer)
     return jsonify({"ok": True})
+
+# ── Alert Panel API ───────────────────────────────────────────────────────────
+@app.route("/api/alerts", methods=["GET"])
+@admin_required
+def get_alerts():
+    """Get unresolved warning/danger notifications for alert panel."""
+    customer = request.args.get("customer", "")
+    conn = get_conn(); cur = conn.cursor()
+    if customer:
+        cur.execute(f"""SELECT id,customer,title,body,type,created_at FROM notifications
+            WHERE customer={_PH} AND type IN ('warning','danger') AND resolved=0
+            ORDER BY created_at DESC LIMIT 50""", (customer,))
+    else:
+        cur.execute("""SELECT id,customer,title,body,type,created_at FROM notifications
+            WHERE type IN ('warning','danger') AND resolved=0
+            ORDER BY created_at DESC LIMIT 50""")
+    rows = cur.fetchall()
+    conn.close()
+    alerts = [{"id": r[0], "customer": r[1], "title": r[2],
+               "body": r[3], "type": r[4], "created_at": str(r[5])} for r in rows]
+    return jsonify({"alerts": alerts, "count": len(alerts)})
+
+
+@app.route("/api/alerts/<int:alert_id>/resolve", methods=["POST"])
+@admin_required
+def resolve_alert(alert_id):
+    """Mark an alert as resolved."""
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute(f"UPDATE notifications SET resolved=1 WHERE id={_PH}", (alert_id,))
+    conn.commit(); conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/alerts/resolve-all", methods=["POST"])
+@admin_required
+def resolve_all_alerts():
+    """Mark all alerts for a customer as resolved."""
+    body = request.get_json() or {}
+    customer = body.get("customer", "")
+    conn = get_conn(); cur = conn.cursor()
+    if customer:
+        cur.execute(f"UPDATE notifications SET resolved=1 WHERE customer={_PH} AND type IN ('warning','danger')", (customer,))
+    else:
+        cur.execute("UPDATE notifications SET resolved=1 WHERE type IN ('warning','danger')")
+    conn.commit(); conn.close()
+    return jsonify({"ok": True})
+
 
 # ── Schedule management API ────────────────────────────────────────────────────
 @app.route("/api/schedules", methods=["GET"])

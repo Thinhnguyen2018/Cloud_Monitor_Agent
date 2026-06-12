@@ -315,6 +315,25 @@
     </div>
   </div>
 
+  <!-- Alert Panel -->
+  <div class="table-card" id="alert-panel" style="margin-bottom:24px;border:1px solid #3f1f1f">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="section-title" style="margin:0">Cảnh báo chưa xử lý</div>
+        <span id="alert-count-badge" style="display:none;background:#dc2626;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px">0</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="alert-customer-select" style="background:#0f1117;border:1px solid #2d3148;color:#94a3b8;padding:4px 10px;border-radius:6px;font-size:12px">
+          <option value="">-- Tất cả KH --</option>
+        </select>
+        <button onclick="resolveAllAlerts()" style="padding:5px 12px;background:#374151;border:none;border-radius:6px;color:#9ca3af;font-size:12px;cursor:pointer">Đã xử lý tất cả</button>
+      </div>
+    </div>
+    <div id="alert-list" style="display:flex;flex-direction:column;gap:8px">
+      <div style="color:#475569;text-align:center;padding:16px;font-size:13px">Đang tải...</div>
+    </div>
+  </div>
+
   <!-- VM Metrics (vMonitor) -->
   <div class="table-card" id="vm-metrics-card" style="margin-bottom:24px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
@@ -761,12 +780,92 @@
     return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + units[Math.min(i, units.length-1)];
   }
 
+  // ── Alert Panel ───────────────────────────────────────────────────────────
+  async function loadAlerts() {
+    const customer = document.getElementById('alert-customer-select').value;
+    const url = '/api/alerts' + (customer ? `?customer=${encodeURIComponent(customer)}` : '');
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      const alerts = data.alerts || [];
+      const badge = document.getElementById('alert-count-badge');
+      const list  = document.getElementById('alert-list');
+      const panel = document.getElementById('alert-panel');
+
+      // Update badge
+      if (alerts.length > 0) {
+        badge.textContent = alerts.length;
+        badge.style.display = 'inline';
+        panel.style.borderColor = '#7f1d1d';
+      } else {
+        badge.style.display = 'none';
+        panel.style.borderColor = '#1e3a2e';
+      }
+
+      if (!alerts.length) {
+        list.innerHTML = '<div style="color:#4ade80;text-align:center;padding:16px;font-size:13px">✅ Không có cảnh báo nào chưa xử lý</div>';
+        return;
+      }
+
+      list.innerHTML = alerts.map(a => {
+        const isRed = a.type === 'danger';
+        const bg    = isRed ? '#2d0a0a' : '#2d1f0a';
+        const border= isRed ? '#dc2626' : '#d97706';
+        const icon  = isRed ? '🔴' : '⚠️';
+        const lines = a.body.split('\n').map(l => `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${l}</div>`).join('');
+        return `
+          <div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:4px">${icon} ${a.title}</div>
+              ${lines}
+              <div style="font-size:10px;color:#475569;margin-top:6px">${a.customer} · ${a.created_at}</div>
+            </div>
+            <button onclick="resolveAlert(${a.id})" style="padding:4px 10px;background:#374151;border:none;border-radius:6px;color:#9ca3af;font-size:11px;cursor:pointer;white-space:nowrap">Đã xử lý</button>
+          </div>`;
+      }).join('');
+    } catch(e) {
+      document.getElementById('alert-list').innerHTML = `<div style="color:#f87171;text-align:center;padding:16px">Lỗi: ${e.message}</div>`;
+    }
+  }
+
+  async function resolveAlert(id) {
+    await fetch(`/api/alerts/${id}/resolve`, {method: 'POST'});
+    loadAlerts();
+  }
+
+  async function resolveAllAlerts() {
+    const customer = document.getElementById('alert-customer-select').value;
+    await fetch('/api/alerts/resolve-all', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({customer})
+    });
+    loadAlerts();
+  }
+
+  // Populate alert customer select
+  async function populateAlertCustomerSelect() {
+    try {
+      const res = await fetch('/api/customers');
+      const data = await res.json();
+      const sel = document.getElementById('alert-customer-select');
+      (data.customers || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name; opt.textContent = c.name;
+        sel.appendChild(opt);
+      });
+    } catch(e) {}
+  }
+
   // ── Init ──────────────────────────────────────────────────────────────────
   loadStats();
   populateCustomerSelect();
+  populateAlertCustomerSelect();
+  loadAlerts();
 
   // Auto-refresh every 2 minutes
   setInterval(loadStats, 120_000);
+  setInterval(loadAlerts, 60_000);
 </script>
 </body>
 </html>
