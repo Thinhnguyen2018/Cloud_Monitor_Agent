@@ -3260,6 +3260,51 @@ def _run_secgroup_alerts():
 scheduler.add_job(_run_secgroup_alerts, trigger="interval", minutes=15,
                   id="secgroup_alerts", replace_existing=True)
 
+
+# ── CPU/RAM Alert ─────────────────────────────────────────────────────────────
+CPU_THRESHOLD = 80.0  # %
+MEM_THRESHOLD = 85.0  # %
+
+def _run_cpu_ram_alerts():
+    """Check CPU and RAM for all VMs, alert if above threshold."""
+    customers = get_all_customers()
+    for cust in customers:
+        try:
+            token, user_info = fetch_gn_token(cust["client_id"], cust["client_secret"])
+            uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
+            P   = cust["project_id"]
+            sv, dv = gn_api(token, uid, "GET", f"v2/{P}/servers")
+            vms = _parse_list(dv) if sv == 200 else []
+            active_vms = [v for v in vms if v.get("status") == "ACTIVE"]
+
+            alerts = []
+            for vm in active_vms[:10]:
+                vm_id   = vm.get("uuid") or vm.get("id", "")
+                vm_name = vm.get("name", vm_id)
+                if not vm_id:
+                    continue
+                cpu = _vmonitor_latest(token, vm_id, "cpu")
+                mem = _vmonitor_latest(token, vm_id, "mem")
+                if cpu is not None and cpu > CPU_THRESHOLD:
+                    alerts.append(f"[{vm_name}] CPU: {cpu:.1f}% (ngưỡng {CPU_THRESHOLD}%)")
+                if mem is not None and mem > MEM_THRESHOLD:
+                    alerts.append(f"[{vm_name}] RAM: {mem:.1f}% (ngưỡng {MEM_THRESHOLD}%)")
+
+            if alerts:
+                db_write_notification(
+                    cust["name"],
+                    f"⚠️ {len(alerts)} VM vượt ngưỡng CPU/RAM",
+                    "\n".join(alerts),
+                    ntype="warning"
+                )
+        except Exception as e:
+            print(f"[CPU_RAM_ALERT] {cust['name']}: {e}")
+
+
+# Schedule CPU/RAM alert every 5 minutes
+scheduler.add_job(_run_cpu_ram_alerts, trigger="interval", minutes=5,
+                  id="cpu_ram_alerts", replace_existing=True)
+
 # ── Serve static chatbot UI ───────────────────────────────────────────────────
 @app.route("/")
 @admin_required
