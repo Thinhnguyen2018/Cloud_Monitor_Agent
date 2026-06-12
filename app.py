@@ -2450,6 +2450,20 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     P  = project_id
     OK = (200, 201, 202, 204)
 
+    # ── VM start / stop / reboot ─────────────────────────────────────────────
+    if action_type == "vm_start":
+        server_id = params.get("serverId", "")
+        s, d = gn_api(token, uid, "PUT", f"v2/{P}/servers/{server_id}/start")
+        return s in OK, d
+    if action_type == "vm_stop":
+        server_id = params.get("serverId", "")
+        s, d = gn_api(token, uid, "PUT", f"v2/{P}/servers/{server_id}/stop")
+        return s in OK, d
+    if action_type == "vm_reboot":
+        server_id = params.get("serverId", "")
+        s, d = gn_api(token, uid, "PUT", f"v2/{P}/servers/{server_id}/reboot", {"type": "SOFT"})
+        return s in OK, d
+
     # ── Volume attach ────────────────────────────────────────────────────────
     # PUT /v2/{projectId}/volumes/{volumeId}/servers/{serverId}/attach
     # Body: {persistentVolume: bool, tags: [], zoneId: str}
