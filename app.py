@@ -3534,14 +3534,24 @@ def _push_to_customer(customer: str, title: str, body: str):
 
 def _ensure_push_table():
     conn = get_conn(); cur = conn.cursor()
-    cur.execute("""CREATE TABLE IF NOT EXISTS push_subscriptions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        customer TEXT NOT NULL DEFAULT '',
-        endpoint TEXT UNIQUE NOT NULL,
-        p256dh TEXT NOT NULL,
-        auth TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )""")
+    if USE_PG and DATABASE_URL:
+        cur.execute("""CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id SERIAL PRIMARY KEY,
+            customer TEXT NOT NULL DEFAULT '',
+            endpoint TEXT UNIQUE NOT NULL,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""")
+    else:
+        cur.execute("""CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer TEXT NOT NULL DEFAULT '',
+            endpoint TEXT UNIQUE NOT NULL,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""")
     conn.commit(); conn.close()
 
 _ensure_push_table()
@@ -3562,10 +3572,10 @@ def push_subscribe():
     if not endpoint or not p256dh or not auth:
         return jsonify({"error": "Invalid subscription"}), 400
     conn = get_conn(); cur = conn.cursor()
+    cur.execute(f"DELETE FROM push_subscriptions WHERE endpoint={_PH}", (endpoint,))
     cur.execute(f"""INSERT INTO push_subscriptions (customer, endpoint, p256dh, auth)
-        VALUES ({_PH},{_PH},{_PH},{_PH})
-        ON CONFLICT(endpoint) DO UPDATE SET customer={_PH}, p256dh={_PH}, auth={_PH}""",
-        (customer, endpoint, p256dh, auth, customer, p256dh, auth))
+        VALUES ({_PH},{_PH},{_PH},{_PH})""",
+        (customer, endpoint, p256dh, auth))
     conn.commit(); conn.close()
     return jsonify({"ok": True})
 
