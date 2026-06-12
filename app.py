@@ -3495,9 +3495,12 @@ _VAPID_KEY_FILE = os.path.join(os.path.dirname(__file__), "vapid_keys.json")
 def _load_or_create_vapid():
     """Load or generate VAPID keys. Returns (private_pem, public_b64url)."""
     if os.path.exists(_VAPID_KEY_FILE):
-        with open(_VAPID_KEY_FILE) as f:
-            d = json.load(f)
-        return d["private"], d["public"]
+        try:
+            with open(_VAPID_KEY_FILE) as f:
+                d = json.load(f)
+            return d["private"], d["public"]
+        except Exception:
+            os.remove(_VAPID_KEY_FILE)  # corrupt file, regenerate
     try:
         from py_vapid import Vapid
         v = Vapid()
