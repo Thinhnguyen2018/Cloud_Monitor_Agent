@@ -99,10 +99,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="header">
     <h1>🖥️ GreenNode</h1>
     <div class="header-right">
-      <div style="position:relative;display:inline-flex">
-        <span style="font-size:22px">🔔</span>
-        <span id="alert-badge" style="position:absolute;top:-4px;right:-6px;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 5px;border-radius:20px;display:none">0</span>
-      </div>
       <button id="logout-btn" onclick="doLogout()">Đăng xuất</button>
     </div>
   </div>
@@ -134,7 +130,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <div class="bottom-nav">
     <button class="nav-item active" id="nav-alerts" onclick="showPage('alerts')">
-      <span class="nav-icon">🚨</span>Cảnh báo
+      <div style="position:relative;display:inline-flex;justify-content:center">
+        <span class="nav-icon">🚨</span>
+        <span id="alert-badge" style="position:absolute;top:-4px;right:-8px;background:#dc2626;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;display:none">0</span>
+      </div>
+      Cảnh báo
     </button>
     <button class="nav-item" id="nav-vms" onclick="showPage('vms')">
       <span class="nav-icon">🖥️</span>VM
