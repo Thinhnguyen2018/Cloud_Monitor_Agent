@@ -582,6 +582,23 @@ def remove_customer(name):
         return jsonify({"ok": True, "message": f"Đã xóa '{name}'"})
     return jsonify({"error": f"Không tìm thấy '{name}'"}), 404
 
+@app.route("/api/customers/<name>/secret", methods=["PUT"])
+@admin_required
+def update_customer_secret(name):
+    body = request.get_json() or {}
+    new_secret = body.get("client_secret", "").strip()
+    if not new_secret:
+        return jsonify({"error": "client_secret is required"}), 400
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute(f"UPDATE customers SET client_secret={_PH} WHERE name={_PH}", (new_secret, name))
+    conn.commit()
+    updated = cur.rowcount
+    conn.close()
+    if not updated:
+        return jsonify({"error": f"Không tìm thấy customer '{name}'"}), 404
+    _token_cache.pop(next((k for k in _token_cache if name.lower() in k.lower()), None), None)
+    return jsonify({"ok": True, "message": f"Đã cập nhật secret cho '{name}'"})
+
 # ── Auth endpoint ─────────────────────────────────────────────────────────────
 @app.route("/api/auth", methods=["POST"])
 def auth():
