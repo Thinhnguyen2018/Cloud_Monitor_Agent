@@ -76,10 +76,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
 /* Sched open btn */
 #sched-btn{background:none;border:1px solid #ddd;border-radius:8px;padding:5px 12px;font-size:12px;color:#666;cursor:pointer;display:none;align-items:center;gap:5px;font-family:inherit;flex-shrink:0}
 #sched-btn:hover{background:#f5f5f0}
+/* Alert panel */
+#alert-panel-side{position:fixed;top:0;right:0;width:420px;height:100vh;background:#fff;border-left:1px solid #e0e0d8;box-shadow:-4px 0 20px rgba(0,0,0,.1);z-index:700;display:none;flex-direction:column}
+#alert-panel-side.open{display:flex}
+#alert-panel-hd{padding:14px 16px;border-bottom:1px solid #f0f0e8;display:flex;align-items:center;gap:8px;flex-shrink:0;background:#fff5f5}
+#alert-panel-hd h3{font-size:14px;font-weight:500;flex:1;color:#dc2626}
+#alert-panel-close{background:none;border:none;font-size:18px;color:#999;cursor:pointer}
+#alert-panel-body{flex:1;overflow-y:auto;padding:12px}
+#alert-btn{background:none;border:1px solid #ddd;border-radius:8px;padding:5px 12px;font-size:12px;color:#666;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;flex-shrink:0;position:relative}
+#alert-btn:hover{background:#fff5f5;border-color:#fca5a5;color:#dc2626}
+#alert-btn-badge{position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;display:none}
 /* Mobile responsive */
 @media(max-width:640px){
   #sidebar{display:none}
   #sched-panel{width:100vw}
+  #alert-panel-side{width:100vw}
   #notif-panel{width:calc(100vw - 24px);right:12px}
   .msg.user{max-width:90%}
   .msg.bot{max-width:98%}
@@ -258,6 +269,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
       Trang KH
     </a>
+    <button id="alert-btn" title="Cảnh báo chưa xử lý">🚨<span id="alert-btn-badge"></span></button>
     <button id="notif-btn" title="Thông báo">🔔<span id="notif-badge"></span></button>
     <span id="conn-badge">⬤ chưa chọn</span>
   </div>
@@ -428,6 +440,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
 </div>
 
 <!-- Notification Panel -->
+<!-- Alert side panel -->
+<div id="alert-panel-side">
+  <div id="alert-panel-hd">
+    <h3>🚨 Cảnh báo chưa xử lý</h3>
+    <button onclick="document.getElementById('alert-panel-side').classList.remove('open')" id="alert-panel-close">✕</button>
+  </div>
+  <div style="padding:8px 12px;border-bottom:1px solid #f0f0e8;display:flex;justify-content:flex-end">
+    <button onclick="resolveAllAlertsAdmin()" style="font-size:11px;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f9f9f9;color:#666;cursor:pointer">Đã xử lý tất cả</button>
+  </div>
+  <div id="alert-panel-body"></div>
+</div>
+
 <div id="notif-panel">
   <div id="notif-hd">
     <span>🔔 Thông báo</span>
@@ -1142,6 +1166,78 @@ function pickCmd(q) {
 document.querySelectorAll('.cmd-item').forEach(el => {
   el.addEventListener('click', () => pickCmd(el.dataset.q));
 });
+
+// ── Alert Panel ───────────────────────────────────────────────────────────
+async function loadAlertsAdmin() {
+  const customer = window._currentCustomer || '';
+  const url = '/api/alerts' + (customer ? `?customer=${encodeURIComponent(customer)}` : '');
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    const alerts = data.alerts || [];
+    const badge = document.getElementById('alert-btn-badge');
+    const body  = document.getElementById('alert-panel-body');
+
+    if (alerts.length > 0) {
+      badge.textContent = alerts.length;
+      badge.style.display = 'inline';
+      document.getElementById('alert-btn').style.borderColor = '#fca5a5';
+      document.getElementById('alert-btn').style.color = '#dc2626';
+    } else {
+      badge.style.display = 'none';
+      document.getElementById('alert-btn').style.borderColor = '#ddd';
+      document.getElementById('alert-btn').style.color = '#666';
+    }
+
+    if (!alerts.length) {
+      body.innerHTML = '<div style="padding:24px;text-align:center;color:#4ade80;font-size:13px">✅ Không có cảnh báo nào chưa xử lý</div>';
+      return;
+    }
+
+    body.innerHTML = alerts.map(a => {
+      const isRed = a.type === 'danger';
+      const bg    = isRed ? '#fff5f5' : '#fffbeb';
+      const border= isRed ? '#fca5a5' : '#fcd34d';
+      const icon  = isRed ? '🔴' : '⚠️';
+      const lines = a.body.split('\n').map(l => `<div style="font-size:11px;color:#666;margin-top:2px">${l}</div>`).join('');
+      return `
+        <div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:10px 12px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div style="flex:1">
+              <div style="font-size:12.5px;font-weight:500;color:#1a1a1a;margin-bottom:3px">${icon} ${a.title}</div>
+              ${lines}
+              <div style="font-size:10px;color:#aaa;margin-top:5px">${a.customer} · ${a.created_at}</div>
+            </div>
+            <button onclick="resolveAlertAdmin(${a.id})" style="font-size:11px;padding:3px 8px;border:1px solid #ddd;border-radius:6px;background:#f9f9f9;color:#555;cursor:pointer;white-space:nowrap;flex-shrink:0">Đã xử lý</button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function resolveAlertAdmin(id) {
+  await fetch(`/api/alerts/${id}/resolve`, {method: 'POST'});
+  loadAlertsAdmin();
+}
+
+async function resolveAllAlertsAdmin() {
+  const customer = window._currentCustomer || '';
+  await fetch('/api/alerts/resolve-all', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({customer})
+  });
+  loadAlertsAdmin();
+}
+
+document.getElementById('alert-btn').addEventListener('click', () => {
+  document.getElementById('alert-panel-side').classList.toggle('open');
+  loadAlertsAdmin();
+});
+
+// Load alert count on start and every 60s
+loadAlertsAdmin();
+setInterval(loadAlertsAdmin, 60_000);
 </script>
 </body>
 </html>
