@@ -2,7 +2,7 @@
 GreenNode AI Agent — Flask Backend
 Deploy: gunicorn app:app -w 2 -b 0.0.0.0:8000
 """
-import os, re, json, hashlib, base64, requests
+import os, re, json, hashlib, base64, requests, secrets
 from flask import Flask, request, jsonify, send_from_directory, session, redirect
 from flask_cors import CORS
 from functools import wraps
@@ -3295,12 +3295,9 @@ def _run_secgroup_alerts():
 
             if warnings:
                 detail = "\n".join(warnings[:10])
-                db_write_notification(
-                    cust["name"],
-                    f"🔴 {len(warnings)} quy tắc Security Group không an toàn",
-                    detail,
-                    ntype="danger"
-                )
+                title = f"🔴 {len(warnings)} quy tắc Security Group không an toàn"
+                db_write_notification(cust["name"], title, detail, ntype="danger")
+                _push_to_customer(cust["name"], title, warnings[0])
         except Exception as e:
             print(f"[SECGROUP_ALERT] {cust['name']}: {e}")
 
@@ -3340,12 +3337,10 @@ def _run_cpu_ram_alerts():
                     alerts.append(f"[{vm_name}] RAM: {mem:.1f}% (ngưỡng {MEM_THRESHOLD}%)")
 
             if alerts:
-                db_write_notification(
-                    cust["name"],
-                    f"⚠️ {len(alerts)} VM vượt ngưỡng CPU/RAM",
-                    "\n".join(alerts),
-                    ntype="warning"
-                )
+                title = f"⚠️ {len(alerts)} VM vượt ngưỡng CPU/RAM"
+                body  = "\n".join(alerts)
+                db_write_notification(cust["name"], title, body, ntype="warning")
+                _push_to_customer(cust["name"], title, alerts[0])
         except Exception as e:
             print(f"[CPU_RAM_ALERT] {cust['name']}: {e}")
 
@@ -3479,6 +3474,100 @@ def dashboard_stats():
 def health():
     return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()})
 
+
+# ── Mobile PWA ────────────────────────────────────────────────────────────────
+@app.route("/mobile")
+def mobile_page():
+    return send_from_directory("static", "mobile.html")
+
+
+# ── Push Notifications (VAPID) ────────────────────────────────────────────────
+_VAPID_KEY_FILE = os.path.join(os.path.dirname(__file__), "vapid_keys.json")
+
+def _load_or_create_vapid():
+    """Load or generate VAPID keys. Returns (private_pem, public_b64url)."""
+    if os.path.exists(_VAPID_KEY_FILE):
+        with open(_VAPID_KEY_FILE) as f:
+            d = json.load(f)
+        return d["private"], d["public"]
+    try:
+        from py_vapid import Vapid
+        v = Vapid()
+        v.generate_keys()
+        priv = v.private_pem().decode() if isinstance(v.private_pem(), bytes) else v.private_pem()
+        pub  = v.public_key
+        with open(_VAPID_KEY_FILE, "w") as f:
+            json.dump({"private": priv, "public": pub}, f)
+        return priv, pub
+    except Exception as e:
+        print(f"[VAPID] Key generation failed: {e}")
+        return None, None
+
+_VAPID_PRIVATE, _VAPID_PUBLIC = _load_or_create_vapid()
+
+def _send_push(subscription_info: dict, title: str, body: str):
+    """Send a web push notification to a single subscription."""
+    if not _VAPID_PRIVATE or not _VAPID_PUBLIC:
+        return
+    try:
+        from pywebpush import webpush, WebPushException
+        webpush(
+            subscription_info=subscription_info,
+            data=json.dumps({"title": title, "body": body}),
+            vapid_private_key=_VAPID_PRIVATE,
+            vapid_claims={"sub": "mailto:admin@greennode.vn"},
+        )
+    except Exception as e:
+        print(f"[PUSH] send failed: {e}")
+
+def _push_to_customer(customer: str, title: str, body: str):
+    """Send push to all subscriptions for a customer (or all if customer='')."""
+    conn = get_conn(); cur = conn.cursor()
+    if customer:
+        cur.execute(f"SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE customer={_PH}", (customer,))
+    else:
+        cur.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions")
+    rows = cur.fetchall(); conn.close()
+    for endpoint, p256dh, auth in rows:
+        sub = {"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}}
+        _send_push(sub, title, body)
+
+def _ensure_push_table():
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer TEXT NOT NULL DEFAULT '',
+        endpoint TEXT UNIQUE NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
+    conn.commit(); conn.close()
+
+_ensure_push_table()
+
+@app.route("/api/push/vapid-public-key", methods=["GET"])
+def push_vapid_key():
+    return jsonify({"key": _VAPID_PUBLIC or ""})
+
+@app.route("/api/push/subscribe", methods=["POST"])
+def push_subscribe():
+    data = request.get_json() or {}
+    sub  = data.get("subscription", {})
+    customer = data.get("customer", "")
+    endpoint = sub.get("endpoint", "")
+    keys     = sub.get("keys", {})
+    p256dh   = keys.get("p256dh", "")
+    auth     = keys.get("auth", "")
+    if not endpoint or not p256dh or not auth:
+        return jsonify({"error": "Invalid subscription"}), 400
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute(f"""INSERT INTO push_subscriptions (customer, endpoint, p256dh, auth)
+        VALUES ({_PH},{_PH},{_PH},{_PH})
+        ON CONFLICT(endpoint) DO UPDATE SET customer={_PH}, p256dh={_PH}, auth={_PH}""",
+        (customer, endpoint, p256dh, auth, customer, p256dh, auth))
+    conn.commit(); conn.close()
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

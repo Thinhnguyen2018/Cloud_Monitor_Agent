@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="theme-color" content="#6366f1"/>
+<link rel="manifest" href="/static/manifest.json"/>
+<title>GreenNode Monitor</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh;padding-bottom:80px}
+
+/* Header */
+.header{background:#1e2235;padding:16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;border-bottom:1px solid #2d3148}
+.header h1{font-size:16px;font-weight:700;color:#e2e8f0}
+.header-right{display:flex;align-items:center;gap:10px}
+#alert-badge{background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;display:none}
+#notif-btn-m{background:none;border:none;font-size:20px;cursor:pointer}
+
+/* Customer selector */
+.customer-bar{padding:12px 16px;background:#161b2e;border-bottom:1px solid #2d3148}
+.customer-bar select{width:100%;background:#0f1117;border:1px solid #2d3148;color:#94a3b8;padding:8px 12px;border-radius:8px;font-size:14px}
+
+/* Section */
+.section{padding:16px}
+.section-title{font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px}
+
+/* Alert cards */
+.alert-card{background:#2d0a0a;border:1px solid #dc2626;border-radius:10px;padding:12px;margin-bottom:8px}
+.alert-card.warning{background:#2d1f0a;border-color:#d97706}
+.alert-title{font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:4px}
+.alert-body{font-size:11px;color:#94a3b8;line-height:1.5}
+.alert-meta{font-size:10px;color:#475569;margin-top:6px;display:flex;justify-content:space-between;align-items:center}
+.resolve-btn{font-size:11px;padding:3px 10px;background:#374151;border:none;border-radius:6px;color:#9ca3af;cursor:pointer}
+
+/* VM cards */
+.vm-card{background:#1e2235;border:1px solid #2d3148;border-radius:10px;padding:14px;margin-bottom:8px}
+.vm-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.vm-name{font-size:14px;font-weight:600;color:#e2e8f0}
+.vm-status{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;text-transform:uppercase}
+.status-active{background:#14532d;color:#4ade80}
+.status-shutoff{background:#450a0a;color:#f87171}
+.status-other{background:#1e3a5f;color:#60a5fa}
+.vm-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.vm-metric{text-align:center}
+.vm-metric-val{font-size:16px;font-weight:700}
+.vm-metric-lbl{font-size:10px;color:#475569;margin-top:2px}
+.vm-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vm-btn{padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.vm-btn-start{background:#14532d;color:#4ade80}
+.vm-btn-stop{background:#450a0a;color:#f87171}
+.vm-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* Empty state */
+.empty{text-align:center;padding:32px 16px;color:#475569;font-size:13px}
+
+/* Loading */
+.loading{text-align:center;padding:24px;color:#475569;font-size:13px}
+
+/* Bottom nav */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#1e2235;border-top:1px solid #2d3148;display:flex;z-index:100}
+.nav-item{flex:1;padding:10px 0 8px;text-align:center;cursor:pointer;border:none;background:none;color:#475569;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:3px;font-family:inherit}
+.nav-item.active{color:#6366f1}
+.nav-icon{font-size:20px}
+
+/* Push banner */
+#push-banner{background:#1e3a5f;border:1px solid #3b82f6;border-radius:10px;padding:12px 14px;margin:12px 16px;display:none;align-items:center;gap:10px}
+#push-banner p{flex:1;font-size:12px;color:#93c5fd}
+#push-enable-btn{padding:6px 12px;background:#3b82f6;border:none;border-radius:6px;color:#fff;font-size:12px;cursor:pointer;white-space:nowrap}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🖥️ GreenNode Monitor</h1>
+  <div class="header-right">
+    <span id="alert-badge">0</span>
+    <button id="notif-btn-m" title="Thông báo">🔔</button>
+  </div>
+</div>
+
+<div class="customer-bar">
+  <select id="customer-select" onchange="onCustomerChange()">
+    <option value="">-- Chọn khách hàng --</option>
+  </select>
+</div>
+
+<!-- Push notification banner -->
+<div id="push-banner">
+  <p>Bật thông báo để nhận alert ngay khi có sự cố</p>
+  <button id="push-enable-btn" onclick="enablePush()">Bật thông báo</button>
+</div>
+
+<!-- Content -->
+<div id="page-alerts" class="page">
+  <div class="section">
+    <div class="section-title">Cảnh báo chưa xử lý</div>
+    <div id="alert-list"><div class="loading">Đang tải...</div></div>
+  </div>
+</div>
+
+<div id="page-vms" class="page" style="display:none">
+  <div class="section">
+    <div class="section-title">Danh sách VM</div>
+    <div id="vm-list"><div class="loading">Chọn khách hàng để xem VM</div></div>
+  </div>
+</div>
+
+<!-- Bottom Nav -->
+<div class="bottom-nav">
+  <button class="nav-item active" id="nav-alerts" onclick="showPage('alerts')">
+    <span class="nav-icon">🚨</span>Cảnh báo
+  </button>
+  <button class="nav-item" id="nav-vms" onclick="showPage('vms')">
+    <span class="nav-icon">🖥️</span>VM
+  </button>
+</div>
+
+<script>
+let currentCustomer = '';
+let vapidPublicKey = '';
+
+// ── PWA Service Worker ────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js').then(reg => {
+    console.log('SW registered');
+    checkPushPermission(reg);
+  });
+}
+
+function checkPushPermission(reg) {
+  if (!('PushManager' in window)) return;
+  if (Notification.permission === 'default') {
+    document.getElementById('push-banner').style.display = 'flex';
+  }
+}
+
+async function enablePush() {
+  if (!vapidPublicKey) {
+    const res = await fetch('/api/push/vapid-public-key');
+    const d = await res.json();
+    vapidPublicKey = d.key;
+  }
+  const reg = await navigator.serviceWorker.ready;
+  try {
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+    });
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({subscription: sub.toJSON(), customer: currentCustomer})
+    });
+    document.getElementById('push-banner').style.display = 'none';
+    alert('✅ Đã bật thông báo!');
+  } catch(e) {
+    alert('Không thể bật thông báo: ' + e.message);
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────
+function showPage(page) {
+  document.getElementById('page-alerts').style.display = page === 'alerts' ? 'block' : 'none';
+  document.getElementById('page-vms').style.display    = page === 'vms'    ? 'block' : 'none';
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('nav-' + page).classList.add('active');
+  if (page === 'alerts') loadAlerts();
+  if (page === 'vms')    loadVMs();
+}
+
+// ── Customer ──────────────────────────────────────────────────────────────
+async function loadCustomers() {
+  try {
+    const res = await fetch('/api/customers');
+    const data = await res.json();
+    const sel = document.getElementById('customer-select');
+    (data.customers || []).forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.name; opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+function onCustomerChange() {
+  currentCustomer = document.getElementById('customer-select').value;
+  loadAlerts();
+  loadVMs();
+}
+
+// ── Alerts ────────────────────────────────────────────────────────────────
+async function loadAlerts() {
+  const url = '/api/alerts' + (currentCustomer ? `?customer=${encodeURIComponent(currentCustomer)}` : '');
+  const list = document.getElementById('alert-list');
+  const badge = document.getElementById('alert-badge');
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    const alerts = data.alerts || [];
+    badge.textContent = alerts.length;
+    badge.style.display = alerts.length ? 'inline' : 'none';
+    if (!alerts.length) {
+      list.innerHTML = '<div class="empty">✅ Không có cảnh báo nào chưa xử lý</div>';
+      return;
+    }
+    list.innerHTML = alerts.map(a => `
+      <div class="alert-card ${a.type === 'warning' ? 'warning' : ''}">
+        <div class="alert-title">${a.type === 'danger' ? '🔴' : '⚠️'} ${a.title}</div>
+        <div class="alert-body">${a.body.replace(/\n/g,'<br>')}</div>
+        <div class="alert-meta">
+          <span>${a.customer} · ${a.created_at.slice(0,16)}</span>
+          <button class="resolve-btn" onclick="resolveAlert(${a.id})">Đã xử lý</button>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="empty">Lỗi tải dữ liệu</div>';
+  }
+}
+
+async function resolveAlert(id) {
+  await fetch(`/api/alerts/${id}/resolve`, {method: 'POST'});
+  loadAlerts();
+}
+
+// ── VMs ───────────────────────────────────────────────────────────────────
+async function loadVMs() {
+  const list = document.getElementById('vm-list');
+  if (!currentCustomer) {
+    list.innerHTML = '<div class="empty">Chọn khách hàng để xem VM</div>';
+    return;
+  }
+  list.innerHTML = '<div class="loading">Đang tải...</div>';
+  try {
+    const res = await fetch(`/api/vmonitor/overview?customer=${encodeURIComponent(currentCustomer)}`);
+    const data = await res.json();
+    const vms = data.vms || [];
+    if (!vms.length) {
+      list.innerHTML = '<div class="empty">Không có VM nào</div>';
+      return;
+    }
+    list.innerHTML = vms.map(vm => {
+      const statusClass = vm.status === 'ACTIVE' ? 'status-active' : vm.status === 'SHUTOFF' ? 'status-shutoff' : 'status-other';
+      const cpu = vm.cpu != null ? vm.cpu.toFixed(1) + '%' : '—';
+      const netIn  = vm.net_in  != null ? fmtBytes(vm.net_in)  + '/s' : '—';
+      const netOut = vm.net_out != null ? fmtBytes(vm.net_out) + '/s' : '—';
+      const cpuColor = vm.cpu > 80 ? '#f87171' : vm.cpu > 60 ? '#fbbf24' : '#4ade80';
+      const isActive = vm.status === 'ACTIVE';
+      return `
+        <div class="vm-card">
+          <div class="vm-header">
+            <div class="vm-name">${vm.name}</div>
+            <span class="vm-status ${statusClass}">${vm.status}</span>
+          </div>
+          <div class="vm-metrics">
+            <div class="vm-metric">
+              <div class="vm-metric-val" style="color:${cpuColor}">${cpu}</div>
+              <div class="vm-metric-lbl">CPU</div>
+            </div>
+            <div class="vm-metric">
+              <div class="vm-metric-val" style="color:#22d3ee">${netIn}</div>
+              <div class="vm-metric-lbl">Net In</div>
+            </div>
+            <div class="vm-metric">
+              <div class="vm-metric-val" style="color:#a78bfa">${netOut}</div>
+              <div class="vm-metric-lbl">Net Out</div>
+            </div>
+          </div>
+          <div class="vm-actions">
+            <button class="vm-btn vm-btn-start" onclick="vmAction('${vm.vm_id}','start')" ${isActive ? 'disabled' : ''}>▶ Bật VM</button>
+            <button class="vm-btn vm-btn-stop"  onclick="vmAction('${vm.vm_id}','stop')"  ${!isActive ? 'disabled' : ''}>⏹ Tắt VM</button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="empty">Lỗi tải dữ liệu</div>';
+  }
+}
+
+async function vmAction(vmId, action) {
+  if (!confirm(`Xác nhận ${action === 'start' ? 'bật' : 'tắt'} VM?`)) return;
+  try {
+    const res = await fetch('/api/action', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({customer: currentCustomer, action: action === 'start' ? 'start_vm' : 'stop_vm', vm_id: vmId})
+    });
+    const d = await res.json();
+    alert(d.message || d.error || 'Đã gửi lệnh');
+    setTimeout(loadVMs, 2000);
+  } catch(e) {
+    alert('Lỗi: ' + e.message);
+  }
+}
+
+function fmtBytes(b) {
+  if (!b) return '0 B';
+  const k = 1024, u = ['B','KB','MB','GB'];
+  const i = Math.floor(Math.log(b) / Math.log(k));
+  return (b / Math.pow(k, i)).toFixed(1) + ' ' + u[Math.min(i, u.length-1)];
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+loadCustomers();
+loadAlerts();
+setInterval(loadAlerts, 60_000);
+</script>
+</body>
+</html>
