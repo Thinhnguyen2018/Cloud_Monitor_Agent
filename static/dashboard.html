@@ -194,6 +194,10 @@
       border-radius: 10px;
       padding: 16px;
       align-self: start;
+      height: 220px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
     .vm-card-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -214,7 +218,7 @@
     .vm-metric-item { text-align: center; }
     .vm-metric-val { font-size: 18px; font-weight: 700; color: #f1f5f9; }
     .vm-metric-lbl { font-size: 10px; color: #64748b; margin-top: 2px; }
-    .vm-sparkline { height: 50px; }
+    .vm-sparkline { flex: 1; min-height: 0; }
 
     /* ── Responsive ─────────────────────────────────────── */
     @media (max-width: 900px) {
