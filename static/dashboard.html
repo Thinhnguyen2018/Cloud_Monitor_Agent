@@ -324,6 +324,7 @@
           <option value="">-- Chọn KH --</option>
         </select>
         <button onclick="loadVmMetrics()" style="padding:5px 12px;background:#6366f1;border:none;border-radius:6px;color:#fff;font-size:12px;cursor:pointer">Tải metrics</button>
+        <span id="vm-refresh-countdown" style="font-size:11px;color:#475569;display:none">Refresh sau <b id="vm-countdown-val">30</b>s</span>
       </div>
     </div>
     <div id="vm-metrics-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;align-items:start">
@@ -609,9 +610,31 @@
     } catch(e) {}
   }
 
-  async function loadVmMetrics() {
+  let _vmRefreshTimer = null;
+  let _vmCountdownTimer = null;
+
+  function startVmAutoRefresh(customer) {
+    clearInterval(_vmRefreshTimer);
+    clearInterval(_vmCountdownTimer);
+    const countdownEl = document.getElementById('vm-refresh-countdown');
+    const valEl = document.getElementById('vm-countdown-val');
+    countdownEl.style.display = 'inline';
+    let remaining = 30;
+    valEl.textContent = remaining;
+    _vmCountdownTimer = setInterval(() => {
+      remaining--;
+      valEl.textContent = remaining;
+      if (remaining <= 0) {
+        remaining = 30;
+        loadVmMetrics(true);
+      }
+    }, 1000);
+  }
+
+  async function loadVmMetrics(isAutoRefresh = false) {
     const customer = document.getElementById('vm-customer-select').value;
     if (!customer) { alert('Vui lòng chọn khách hàng'); return; }
+    if (!isAutoRefresh) startVmAutoRefresh(customer);
 
     const grid = document.getElementById('vm-metrics-grid');
     grid.innerHTML = '<div style="color:#64748b;text-align:center;padding:24px;grid-column:1/-1">Đang tải metrics...</div>';
