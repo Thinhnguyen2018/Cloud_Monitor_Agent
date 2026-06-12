@@ -663,6 +663,8 @@ async function selectCustomer(name) {
   }
   currentCustomer = customers.find(c => c.name === name);
   if (!currentCustomer) return;
+  window._currentCustomer = name;
+  loadAlertsAdmin();
   if (!chatHistories[name]) chatHistories[name] = [];
   pendingAction = null;
   renderSidebar();
@@ -711,6 +713,7 @@ function showInfoPanel() {
     chatMessages[currentCustomer.name] = document.getElementById('chat').innerHTML;
   }
   currentCustomer = null;
+  window._currentCustomer = '';
   pendingAction   = null;
   document.getElementById('info-panel').style.display  = 'flex';
   document.getElementById('info-panel').style.flexDirection = 'column';
