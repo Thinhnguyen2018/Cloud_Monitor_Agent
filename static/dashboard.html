@@ -664,7 +664,7 @@
           <div class="vm-metric-lbl">Net Out</div>
         </div>
       </div>
-      <canvas class="vm-sparkline" id="spark-${vm.vm_id}"></canvas>
+      <canvas class="vm-sparkline" id="spark-${vm.vm_id}" style="display:none"></canvas>
       <div style="font-size:10px;color:#334155;margin-top:4px;text-align:right">${vm.vm_id}</div>
     `;
     return div;
@@ -686,6 +686,8 @@
 
       const canvas = document.getElementById(`spark-${vmId}`);
       if (!canvas) return;
+      if (!pts.length) { canvas.style.display = 'none'; return; }
+      canvas.style.display = 'block';
       if (charts[`spark-${vmId}`]) { charts[`spark-${vmId}`].destroy(); }
 
       charts[`spark-${vmId}`] = new Chart(canvas, {
