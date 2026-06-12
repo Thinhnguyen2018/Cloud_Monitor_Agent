@@ -3145,7 +3145,7 @@ def vmonitor_overview():
 
     result = []
     for vm in vms[:10]:  # limit to avoid rate limit
-        vm_id = vm.get("id", "")
+        vm_id = vm.get("uuid") or vm.get("id", "")
         if not vm_id:
             continue
         cpu = _vmonitor_latest(token, vm_id, "cpu")
