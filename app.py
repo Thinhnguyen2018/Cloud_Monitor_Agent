@@ -3188,6 +3188,74 @@ def _run_health_alerts():
 scheduler.add_job(_run_health_alerts, trigger="interval", minutes=30,
                   id="health_alerts", replace_existing=True)
 
+
+# ── Security Group Alert ───────────────────────────────────────────────────────
+_DANGEROUS_PORTS = {22: "SSH", 3389: "RDP", 23: "Telnet", 3306: "MySQL", 5432: "PostgreSQL"}
+
+def _is_dangerous_rule(rule):
+    """Return warning message if a security group rule is insecure, else None."""
+    remote = rule.get("remoteIpPrefix") or rule.get("remote_ip_prefix") or ""
+    proto  = (rule.get("protocol") or rule.get("ethertype") or "").lower()
+    port_min = rule.get("portRangeMin") or rule.get("port_range_min")
+    port_max = rule.get("portRangeMax") or rule.get("port_range_max")
+    direction = (rule.get("direction") or "").lower()
+
+    if direction != "ingress":
+        return None
+    if remote not in ("0.0.0.0/0", "::/0", ""):
+        return None
+
+    # All ports open
+    if port_min is None and port_max is None and proto in ("tcp", "udp", ""):
+        return f"Tất cả port mở ({proto or 'all'}) từ 0.0.0.0/0"
+
+    # Range covers dangerous port
+    if port_min is not None and port_max is not None:
+        for port, svc in _DANGEROUS_PORTS.items():
+            if int(port_min) <= port <= int(port_max):
+                return f"Port {port} ({svc}) mở từ 0.0.0.0/0"
+
+    return None
+
+
+def _run_secgroup_alerts():
+    """Check all customers' security groups for dangerous rules."""
+    customers = get_all_customers()
+    for cust in customers:
+        try:
+            token, user_info = fetch_gn_token(cust["client_id"], cust["client_secret"])
+            uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
+            P   = cust["project_id"]
+
+            # Get all security groups
+            sv, sd = gn_api(token, uid, "GET", f"v2/{P}/securityGroups")
+            secgroups = _parse_list(sd) if sv == 200 else []
+
+            warnings = []
+            for sg in secgroups:
+                sg_name = sg.get("name", "?")
+                rules = sg.get("securityGroupRuleEntities") or sg.get("rules") or []
+                for rule in rules:
+                    msg = _is_dangerous_rule(rule)
+                    if msg:
+                        warnings.append(f"[{sg_name}] {msg}")
+
+            if warnings:
+                detail = "\n".join(warnings[:10])
+                db_write_notification(
+                    cust["name"],
+                    f"🔴 {len(warnings)} quy tắc Security Group không an toàn",
+                    detail,
+                    ntype="danger"
+                )
+        except Exception as e:
+            print(f"[SECGROUP_ALERT] {cust['name']}: {e}")
+
+
+# Schedule security group check every 15 minutes
+scheduler.add_job(_run_secgroup_alerts, trigger="interval", minutes=15,
+                  id="secgroup_alerts", replace_existing=True)
+
 # ── Serve static chatbot UI ───────────────────────────────────────────────────
 @app.route("/")
 @admin_required
