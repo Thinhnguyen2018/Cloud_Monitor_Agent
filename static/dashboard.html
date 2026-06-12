@@ -187,6 +187,34 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── VM Metric cards ────────────────────────────────── */
+    .vm-card {
+      background: #1e2235;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .vm-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .vm-name { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+    .vm-status {
+      font-size: 10px; font-weight: 700; padding: 2px 8px;
+      border-radius: 20px; text-transform: uppercase; letter-spacing: .5px;
+    }
+    .vm-status-active  { background:#14532d; color:#4ade80; }
+    .vm-status-shutoff { background:#450a0a; color:#f87171; }
+    .vm-status-other   { background:#1e3a5f; color:#60a5fa; }
+    .vm-metrics-row {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+      margin-bottom: 10px;
+    }
+    .vm-metric-item { text-align: center; }
+    .vm-metric-val { font-size: 18px; font-weight: 700; color: #f1f5f9; }
+    .vm-metric-lbl { font-size: 10px; color: #64748b; margin-top: 2px; }
+    .vm-sparkline { height: 50px; }
+
     /* ── Responsive ─────────────────────────────────────── */
     @media (max-width: 900px) {
       .chart-grid { grid-template-columns: 1fr; }
@@ -279,6 +307,22 @@
     <div class="chart-card">
       <div class="section-title">Trạng thái lịch hẹn</div>
       <canvas id="chart-schedules"></canvas>
+    </div>
+  </div>
+
+  <!-- VM Metrics (vMonitor) -->
+  <div class="table-card" id="vm-metrics-card" style="margin-bottom:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="section-title" style="margin:0">VM Metrics (Real-time)</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="vm-customer-select" style="background:#0f1117;border:1px solid #2d3148;color:#94a3b8;padding:4px 10px;border-radius:6px;font-size:12px">
+          <option value="">-- Chọn KH --</option>
+        </select>
+        <button onclick="loadVmMetrics()" style="padding:5px 12px;background:#6366f1;border:none;border-radius:6px;color:#fff;font-size:12px;cursor:pointer">Tải metrics</button>
+      </div>
+    </div>
+    <div id="vm-metrics-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+      <div style="color:#475569;text-align:center;padding:24px;grid-column:1/-1">Chọn khách hàng và nhấn "Tải metrics"</div>
     </div>
   </div>
 
@@ -545,8 +589,151 @@
     }).join('');
   }
 
+  // ── VM Metrics (vMonitor) ─────────────────────────────────────────────────
+  async function populateCustomerSelect() {
+    try {
+      const res = await fetch('/api/customers');
+      if (!res.ok) return;
+      const data = await res.json();
+      const sel = document.getElementById('vm-customer-select');
+      (data.customers || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name; opt.textContent = c.name;
+        sel.appendChild(opt);
+      });
+    } catch(e) {}
+  }
+
+  async function loadVmMetrics() {
+    const customer = document.getElementById('vm-customer-select').value;
+    if (!customer) { alert('Vui lòng chọn khách hàng'); return; }
+
+    const grid = document.getElementById('vm-metrics-grid');
+    grid.innerHTML = '<div style="color:#64748b;text-align:center;padding:24px;grid-column:1/-1">Đang tải metrics...</div>';
+
+    try {
+      const res = await fetch(`/api/vmonitor/overview?customer=${encodeURIComponent(customer)}`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data.vms || !data.vms.length) {
+        grid.innerHTML = '<div style="color:#475569;text-align:center;padding:24px;grid-column:1/-1">Không có VM nào hoặc chưa cài Telegraf agent</div>';
+        return;
+      }
+      grid.innerHTML = '';
+      for (const vm of data.vms) {
+        const card = renderVmCard(vm);
+        grid.appendChild(card);
+      }
+      // Load sparkline charts after cards are rendered
+      for (const vm of data.vms) {
+        loadSparkline(vm.vm_id, customer);
+      }
+    } catch(e) {
+      grid.innerHTML = `<div style="color:#f87171;text-align:center;padding:24px;grid-column:1/-1">Lỗi: ${e.message}</div>`;
+    }
+  }
+
+  function renderVmCard(vm) {
+    const div = document.createElement('div');
+    div.className = 'vm-card';
+    div.id = `vm-card-${vm.vm_id}`;
+
+    const statusClass = vm.status === 'ACTIVE' ? 'vm-status-active'
+                      : vm.status === 'SHUTOFF' ? 'vm-status-shutoff' : 'vm-status-other';
+    const cpu = vm.cpu !== null && vm.cpu !== undefined ? vm.cpu.toFixed(1) + '%' : '—';
+    const netIn  = vm.net_in  !== null && vm.net_in  !== undefined ? fmtBytes(vm.net_in)  + '/s' : '—';
+    const netOut = vm.net_out !== null && vm.net_out !== undefined ? fmtBytes(vm.net_out) + '/s' : '—';
+
+    div.innerHTML = `
+      <div class="vm-card-header">
+        <div class="vm-name">${vm.name}</div>
+        <span class="vm-status ${statusClass}">${vm.status || '?'}</span>
+      </div>
+      <div class="vm-metrics-row">
+        <div class="vm-metric-item">
+          <div class="vm-metric-val" style="color:${cpuColor(vm.cpu)}">${cpu}</div>
+          <div class="vm-metric-lbl">CPU</div>
+        </div>
+        <div class="vm-metric-item">
+          <div class="vm-metric-val" style="color:#06b6d4">${netIn}</div>
+          <div class="vm-metric-lbl">Net In</div>
+        </div>
+        <div class="vm-metric-item">
+          <div class="vm-metric-val" style="color:#8b5cf6">${netOut}</div>
+          <div class="vm-metric-lbl">Net Out</div>
+        </div>
+      </div>
+      <canvas class="vm-sparkline" id="spark-${vm.vm_id}"></canvas>
+      <div style="font-size:10px;color:#334155;margin-top:4px;text-align:right">${vm.vm_id}</div>
+    `;
+    return div;
+  }
+
+  async function loadSparkline(vmId, customer) {
+    try {
+      const res = await fetch(`/api/vmonitor/metrics/${vmId}?customer=${encodeURIComponent(customer)}&metric=cpu&minutes=60&period=60`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const pts = data.datapoints || [];
+      if (!pts.length) return;
+
+      const labels = pts.map(p => {
+        const d = new Date(p[0] * 1000);
+        return d.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+      });
+      const values = pts.map(p => p[1] !== null ? parseFloat(p[1]) : 0);
+
+      const canvas = document.getElementById(`spark-${vmId}`);
+      if (!canvas) return;
+      if (charts[`spark-${vmId}`]) { charts[`spark-${vmId}`].destroy(); }
+
+      charts[`spark-${vmId}`] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            borderColor: '#6366f1',
+            backgroundColor: '#6366f115',
+            borderWidth: 1.5,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.3,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: {
+            callbacks: { label: ctx => ` CPU: ${ctx.parsed.y.toFixed(1)}%` }
+          }},
+          scales: {
+            x: { display: false },
+            y: { display: false, beginAtZero: true, max: 100 }
+          }
+        }
+      });
+    } catch(e) {}
+  }
+
+  function cpuColor(v) {
+    if (v === null || v === undefined) return '#475569';
+    if (v >= 80) return '#ef4444';
+    if (v >= 60) return '#f59e0b';
+    return '#22c55e';
+  }
+
+  function fmtBytes(bytes) {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const units = ['B','KB','MB','GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + units[Math.min(i, units.length-1)];
+  }
+
   // ── Init ──────────────────────────────────────────────────────────────────
   loadStats();
+  populateCustomerSelect();
 
   // Auto-refresh every 2 minutes
   setInterval(loadStats, 120_000);

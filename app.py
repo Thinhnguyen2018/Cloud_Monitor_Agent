@@ -2979,6 +2979,165 @@ def cancel_schedule_v2(job_id):
     return jsonify({"ok": True, "message": "Đã hủy lịch hẹn"})
 
 
+# ── vMonitor Integration ──────────────────────────────────────────────────────
+VMONITOR_BASE = "https://vmonitor.console.vngcloud.vn/vmonitor-api/api/v1"
+VMONITOR_METRICS = {
+    "cpu":      "vserver.cpu.utilization_norm_perc",
+    "net_in":   "vserver.net.in_bytes_sec",
+    "net_out":  "vserver.net.out_bytes_sec",
+    "disk_read":  "vserver.disk.read_bytes_sec",
+    "disk_write": "vserver.disk.write_bytes_sec",
+    "mem":      "vserver.mem.used_percent",
+}
+
+def _vmonitor_query(token, vm_id, metric_key, minutes=60, period=60):
+    """Query a single metric for a VM from vMonitor. Returns list of [ts, val]."""
+    import time
+    now_ms  = int(time.time() * 1000)
+    start_ms = now_ms - minutes * 60 * 1000
+    metric_name = VMONITOR_METRICS.get(metric_key, metric_key)
+    body = {
+        "type": "SIMPLE",
+        "data": {
+            "graph": {
+                "name": metric_name,
+                "dimensions": f"resource_id:{vm_id},product:vserver",
+                "statistics": "avg",
+                "group_by": "none",
+                "offset": 0,
+                "limit": "",
+                "rollup": "",
+                "rate": 0,
+            },
+            "start_time": start_ms,
+            "end_time":   now_ms,
+            "period":     period,
+            "alarm": False,
+            "reduction": None,
+        }
+    }
+    r = requests.post(
+        f"{VMONITOR_BASE}/statistics",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json=body, verify=False, timeout=15,
+    )
+    if not r.ok:
+        return []
+    data = r.json()
+    if isinstance(data, list) and data:
+        return data[0].get("statistics", [])
+    return []
+
+def _vmonitor_latest(token, vm_id, metric_key):
+    """Return the latest non-null value for a metric."""
+    pts = _vmonitor_query(token, vm_id, metric_key, minutes=15, period=60)
+    for ts, val in reversed(pts):
+        if val is not None and val != "null":
+            try: return float(val)
+            except: pass
+    return None
+
+@app.route("/api/vmonitor/metrics/<vm_id>", methods=["GET"])
+@admin_required
+def vmonitor_vm_metrics(vm_id):
+    """
+    Query vMonitor metrics for a specific VM.
+    Query params:
+      - customer: customer name (required to get credentials)
+      - metric: cpu|net_in|net_out|disk_read|disk_write|mem (default: cpu)
+      - minutes: time range in minutes (default: 60)
+      - period: aggregation period in seconds (default: 60)
+    Returns: {metric, vm_id, datapoints: [[ts_sec, value], ...], latest: float}
+    """
+    customer_name = request.args.get("customer", "")
+    metric_key    = request.args.get("metric", "cpu")
+    minutes       = int(request.args.get("minutes", 60))
+    period        = int(request.args.get("period", 60))
+
+    conn = get_conn(); cur = conn.cursor()
+    if customer_name:
+        cur.execute(f"SELECT client_id, client_secret FROM customers WHERE name={_PH}", (customer_name,))
+    else:
+        cur.execute("SELECT client_id, client_secret FROM customers LIMIT 1")
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Customer not found"}), 404
+
+    client_id, client_secret = row
+    try:
+        token, _ = fetch_gn_token(client_id, client_secret)
+    except Exception as e:
+        return jsonify({"error": f"Auth failed: {e}"}), 500
+
+    pts = _vmonitor_query(token, vm_id, metric_key, minutes=minutes, period=period)
+    latest = None
+    for ts, val in reversed(pts):
+        if val is not None and val != "null":
+            try: latest = float(val); break
+            except: pass
+
+    return jsonify({
+        "metric":     metric_key,
+        "metric_name": VMONITOR_METRICS.get(metric_key, metric_key),
+        "vm_id":      vm_id,
+        "minutes":    minutes,
+        "period":     period,
+        "datapoints": pts,
+        "latest":     latest,
+    })
+
+
+@app.route("/api/vmonitor/overview", methods=["GET"])
+@admin_required
+def vmonitor_overview():
+    """
+    Get latest CPU, memory for all VMs of a customer.
+    Query params:
+      - customer: customer name
+    Returns: [{vm_id, cpu, net_in, net_out, disk_read, disk_write}, ...]
+    """
+    customer_name = request.args.get("customer", "")
+    conn = get_conn(); cur = conn.cursor()
+    if customer_name:
+        cur.execute(f"SELECT client_id, client_secret, project_id FROM customers WHERE name={_PH}", (customer_name,))
+    else:
+        cur.execute("SELECT client_id, client_secret, project_id FROM customers LIMIT 1")
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Customer not found"}), 404
+
+    client_id, client_secret, project_id = row
+    try:
+        token, user_info = fetch_gn_token(client_id, client_secret)
+    except Exception as e:
+        return jsonify({"error": f"Auth failed: {e}"}), 500
+
+    uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
+    sv, vms_data = gn_api(token, uid, "GET", f"v2/{project_id}/servers")
+    vms = _parse_list(vms_data) if sv == 200 else []
+
+    result = []
+    for vm in vms[:10]:  # limit to avoid rate limit
+        vm_id = vm.get("id", "")
+        if not vm_id:
+            continue
+        cpu = _vmonitor_latest(token, vm_id, "cpu")
+        net_in  = _vmonitor_latest(token, vm_id, "net_in")
+        net_out = _vmonitor_latest(token, vm_id, "net_out")
+        result.append({
+            "vm_id":   vm_id,
+            "name":    vm.get("name", vm_id),
+            "status":  vm.get("status", ""),
+            "cpu":     cpu,
+            "net_in":  net_in,
+            "net_out": net_out,
+        })
+
+    return jsonify({"vms": result, "customer": customer_name})
+
+
 # ── Health Alert (background check) ──────────────────────────────────────────
 def _run_health_alerts():
     """Check all customers for SHUTOFF/ERROR VMs and create notifications."""
