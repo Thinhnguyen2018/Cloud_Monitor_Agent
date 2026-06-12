@@ -256,13 +256,21 @@ async function loadCustomers() {
     if (!res) return;
     const data = await res.json();
     const sel = document.getElementById('customer-select');
+    const list = data.customers || [];
+    if (!list.length) {
+      sel.innerHTML = '<option value="">-- Không có khách hàng --</option>';
+      return;
+    }
     sel.innerHTML = '<option value="">-- Chọn khách hàng --</option>';
-    (data.customers || []).forEach(c => {
+    list.forEach(c => {
       const opt = document.createElement('option');
       opt.value = c.name; opt.textContent = c.name;
       sel.appendChild(opt);
     });
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('customer-select').innerHTML =
+      `<option value="">-- Lỗi tải: ${e.message} --</option>`;
+  }
 }
 
 function onCustomerChange() {
