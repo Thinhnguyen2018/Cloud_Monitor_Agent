@@ -3194,20 +3194,21 @@ _DANGEROUS_PORTS = {22: "SSH", 3389: "RDP", 23: "Telnet", 3306: "MySQL", 5432: "
 
 def _is_dangerous_rule(rule):
     """Return warning message if a security group rule is insecure, else None."""
-    remote = rule.get("remoteIpPrefix") or rule.get("remote_ip_prefix") or ""
-    proto  = (rule.get("protocol") or rule.get("ethertype") or "").lower()
-    port_min = rule.get("portRangeMin") or rule.get("port_range_min")
-    port_max = rule.get("portRangeMax") or rule.get("port_range_max")
     direction = (rule.get("direction") or "").lower()
-
     if direction != "ingress":
         return None
+
+    remote = rule.get("remoteIpPrefix") or ""
     if remote not in ("0.0.0.0/0", "::/0", ""):
         return None
 
+    proto    = (rule.get("protocol") or "").lower()
+    port_min = rule.get("portRangeMin")
+    port_max = rule.get("portRangeMax")
+
     # All ports open
-    if port_min is None and port_max is None and proto in ("tcp", "udp", ""):
-        return f"Tất cả port mở ({proto or 'all'}) từ 0.0.0.0/0"
+    if proto == "any" or (port_min == 0 and port_max == 65535):
+        return f"Tất cả port mở từ 0.0.0.0/0"
 
     # Range covers dangerous port
     if port_min is not None and port_max is not None:
@@ -3227,14 +3228,17 @@ def _run_secgroup_alerts():
             uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
             P   = cust["project_id"]
 
-            # Get all security groups
-            sv, sd = gn_api(token, uid, "GET", f"v2/{P}/securityGroups")
+            sv, sd = gn_api(token, uid, "GET", f"v2/{P}/secgroups")
             secgroups = _parse_list(sd) if sv == 200 else []
 
             warnings = []
             for sg in secgroups:
                 sg_name = sg.get("name", "?")
-                rules = sg.get("securityGroupRuleEntities") or sg.get("rules") or []
+                sg_id   = sg.get("id", "")
+                if not sg_id:
+                    continue
+                sv2, rd = gn_api(token, uid, "GET", f"v2/{P}/secgroups/{sg_id}/secGroupRules")
+                rules = _parse_list(rd) if sv2 == 200 else []
                 for rule in rules:
                     msg = _is_dangerous_rule(rule)
                     if msg:
