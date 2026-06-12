@@ -300,7 +300,7 @@ async function loadAlerts() {
         <div class="alert-title">${a.type === 'danger' ? '🔴' : '⚠️'} ${a.title}</div>
         <div class="alert-body">${(a.body||'').replace(/\n/g,'<br>')}</div>
         <div class="alert-meta">
-          <span>${a.customer} · ${a.created_at.slice(0,16)}</span>
+          <span>${a.customer} · ${fmtTime(a.created_at)}</span>
           <button class="resolve-btn" onclick="resolveAlert(${a.id})">Đã xử lý</button>
         </div>
       </div>`).join('');
@@ -383,6 +383,12 @@ async function vmAction(vmId, action) {
   } catch(e) {
     alert('Lỗi: ' + e.message);
   }
+}
+
+function fmtTime(s) {
+  if (!s) return '';
+  const d = new Date(s.replace(' ', 'T') + (s.includes('+') ? '' : 'Z'));
+  return d.toLocaleString('vi-VN', {timeZone: 'Asia/Ho_Chi_Minh', hour12: false});
 }
 
 function fmtBytes(b) {

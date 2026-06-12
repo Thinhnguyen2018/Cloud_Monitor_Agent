@@ -294,6 +294,14 @@ def db_get_audit(customer=None, limit=50):
 def db_write_notification(customer, title, body, ntype="info"):
     try:
         conn = get_conn(); cur = conn.cursor()
+        # Avoid duplicate alert: skip if same customer+title unresolved within 5 minutes
+        time_expr = "NOW() - INTERVAL '5 minutes'" if (USE_PG and DATABASE_URL) else "datetime('now', '-5 minutes')"
+        cur.execute(f"""SELECT id FROM notifications
+            WHERE customer={_PH} AND title={_PH} AND resolved=0
+            AND created_at >= {time_expr}
+            LIMIT 1""", (customer, title))
+        if cur.fetchone():
+            conn.close(); return
         cur.execute(f"""INSERT INTO notifications (customer,title,body,type)
             VALUES ({_PH},{_PH},{_PH},{_PH})""", (customer, title, body, ntype))
         conn.commit(); conn.close()
