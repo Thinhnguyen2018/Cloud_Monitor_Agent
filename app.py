@@ -2998,6 +2998,14 @@ def cancel_schedule_v2(job_id):
 
 # ── vMonitor Integration ──────────────────────────────────────────────────────
 VMONITOR_BASE = "https://vmonitor.console.vngcloud.vn/vmonitor-api/api/v1"
+
+def _parse_list(d):
+    """Extract list from any API response shape."""
+    if isinstance(d, list): return d
+    if isinstance(d, dict):
+        for k in ("listData", "data", "subnets", "networks", "items", "results", "servers"):
+            if d.get(k): return d[k]
+    return []
 VMONITOR_METRICS = {
     "cpu":      "vserver.cpu.utilization_norm_perc",
     "net_in":   "vserver.net.in_bytes_sec",
