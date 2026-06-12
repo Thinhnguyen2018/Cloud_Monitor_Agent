@@ -99,7 +99,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="header">
     <h1>🖥️ GreenNode</h1>
     <div class="header-right">
-      <span id="alert-badge">0</span>
+      <div style="position:relative;display:inline-flex">
+        <span style="font-size:22px">🔔</span>
+        <span id="alert-badge" style="position:absolute;top:-4px;right:-6px;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 5px;border-radius:20px;display:none">0</span>
+      </div>
       <button id="logout-btn" onclick="doLogout()">Đăng xuất</button>
     </div>
   </div>
