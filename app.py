@@ -3351,7 +3351,7 @@ def _run_cpu_ram_alerts():
 
 
 # Schedule CPU/RAM alert every 5 minutes
-scheduler.add_job(_run_cpu_ram_alerts, trigger="interval", minutes=5,
+scheduler.add_job(_run_cpu_ram_alerts, trigger="interval", minutes=1,
                   id="cpu_ram_alerts", replace_existing=True)
 
 # ── Serve static chatbot UI ───────────────────────────────────────────────────
