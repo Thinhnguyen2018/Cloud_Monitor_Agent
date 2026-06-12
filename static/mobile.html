@@ -375,14 +375,19 @@ async function loadVMs() {
 async function vmAction(vmId, action) {
   if (!confirm(`Xác nhận ${action === 'start' ? 'bật' : 'tắt'} VM?`)) return;
   try {
-    const res = await apiFetch('/api/action', {
+    const res = await apiFetch('/api/action2', {
       method: 'POST',
-      body: JSON.stringify({customer: currentCustomer, action: action === 'start' ? 'start_vm' : 'stop_vm', vm_id: vmId})
+      body: JSON.stringify({
+        customerName: currentCustomer,
+        action: action === 'start' ? 'vm_start' : 'vm_stop',
+        params: {serverId: vmId}
+      })
     });
     if (!res) return;
     const d = await res.json();
-    alert(d.message || d.error || 'Đã gửi lệnh');
-    setTimeout(loadVMs, 2000);
+    if (d.error) alert('❌ ' + d.error);
+    else alert(action === 'start' ? '✅ Đã gửi lệnh bật VM' : '✅ Đã gửi lệnh tắt VM');
+    setTimeout(loadVMs, 3000);
   } catch(e) {
     alert('Lỗi: ' + e.message);
   }
