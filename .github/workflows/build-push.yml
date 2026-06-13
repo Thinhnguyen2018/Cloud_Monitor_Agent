@@ -23,4 +23,6 @@ jobs:
           context: .
           file: Dockerfile.agentbase
           push: true
-          tags: nguyenngocgiathinh/greennode-agent:latest
+          tags: |
+            nguyenngocgiathinh/greennode-agent:latest
+            nguyenngocgiathinh/greennode-agent:${{ github.sha }}
