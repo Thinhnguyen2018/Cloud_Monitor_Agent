@@ -323,7 +323,11 @@ def db_mark_notifications_read(customer):
     cur.execute(f"UPDATE notifications SET read=1 WHERE customer={_PH}", (customer,))
     conn.commit(); conn.close()
 
-init_db()
+try:
+    init_db()
+    print("[STARTUP] DB initialized OK")
+except Exception as e:
+    print(f"[STARTUP] DB init failed: {e}")
 
 def get_all_customers():
     conn = get_conn()
