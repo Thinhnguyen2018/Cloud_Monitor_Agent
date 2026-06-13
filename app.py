@@ -185,6 +185,14 @@ def init_db():
                 created_at  TIMESTAMP DEFAULT NOW()
             )
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS token_cache (
+                client_id   TEXT PRIMARY KEY,
+                token       TEXT NOT NULL,
+                user_info   TEXT NOT NULL DEFAULT '{}',
+                expires_at  TIMESTAMP NOT NULL
+            )
+        """)
     else:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS customers (
@@ -236,6 +244,14 @@ def init_db():
                 read        INTEGER DEFAULT 0,
                 resolved    INTEGER DEFAULT 0,
                 created_at  TEXT DEFAULT (datetime('now','localtime'))
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS token_cache (
+                client_id   TEXT PRIMARY KEY,
+                token       TEXT NOT NULL,
+                user_info   TEXT NOT NULL DEFAULT '{}',
+                expires_at  TEXT NOT NULL
             )
         """)
     conn.commit()
@@ -494,25 +510,43 @@ GN_USERINFO_URL     = "https://iamapis.vngcloud.vn/accounts-api/v1/auth/userinfo
 GN_API_BASE         = "https://hcm-3.api.vngcloud.vn/vserver/vserver-gateway"
 PROXY_TOKEN_URL     = os.getenv("PROXY_TOKEN_URL", "")  # if set, use proxy instead of direct IAM
 
-# ── Token cache (in-memory, thread-safe) ─────────────────────────────────────
-_token_cache    = {}   # key: client_id → {token, expires_at, user_info}
-_rate_limit_cache = {} # key: client_id → retry_after datetime
-_cache_lock     = threading.Lock()
+# ── Token cache (persistent DB + in-memory rate-limit) ───────────────────────
+_rate_limit_cache = {} # key: client_id → retry_after datetime (in-memory only)
+_cache_lock       = threading.Lock()
 
 def get_cached_token(client_id):
-    with _cache_lock:
-        entry = _token_cache.get(client_id)
-        if entry and datetime.utcnow() < entry["expires_at"]:
-            return entry
-        return None
+    try:
+        conn = get_conn(); cur = conn.cursor()
+        now  = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        cur.execute(f"SELECT token, user_info FROM token_cache WHERE client_id={_PH} AND expires_at > {_PH}",
+                    (client_id, now))
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            import json as _json
+            return {"token": row[0], "user_info": _json.loads(row[1])}
+    except Exception:
+        pass
+    return None
 
 def set_cached_token(client_id, token, expires_in, user_info):
+    import json as _json
+    expires_at = (datetime.utcnow() + timedelta(seconds=expires_in - 60)).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        conn = get_conn(); cur = conn.cursor()
+        if USE_PG and DATABASE_URL:
+            cur.execute("""INSERT INTO token_cache (client_id, token, user_info, expires_at)
+                           VALUES (%s,%s,%s,%s) ON CONFLICT (client_id) DO UPDATE
+                           SET token=EXCLUDED.token, user_info=EXCLUDED.user_info, expires_at=EXCLUDED.expires_at""",
+                        (client_id, token, _json.dumps(user_info), expires_at))
+        else:
+            cur.execute("""INSERT OR REPLACE INTO token_cache (client_id, token, user_info, expires_at)
+                           VALUES (?,?,?,?)""",
+                        (client_id, token, _json.dumps(user_info), expires_at))
+        conn.commit(); conn.close()
+    except Exception as e:
+        print(f"[TOKEN_CACHE] DB write failed: {e}")
     with _cache_lock:
-        _token_cache[client_id] = {
-            "token":      token,
-            "user_info":  user_info,
-            "expires_at": datetime.utcnow() + timedelta(seconds=expires_in - 60)
-        }
         _rate_limit_cache.pop(client_id, None)
 
 def fetch_gn_token(client_id, client_secret):
@@ -661,7 +695,15 @@ def update_customer_secret(name):
     conn.close()
     if not updated:
         return jsonify({"error": f"Không tìm thấy customer '{name}'"}), 404
-    _token_cache.pop(next((k for k in _token_cache if name.lower() in k.lower()), None), None)
+    # Invalidate cached token for this customer
+    cust = next((c for c in get_all_customers() if c["name"] == name), None)
+    if cust:
+        try:
+            dc = get_conn(); dcc = dc.cursor()
+            dcc.execute(f"DELETE FROM token_cache WHERE client_id={_PH}", (cust["client_id"],))
+            dc.commit(); dc.close()
+        except Exception:
+            pass
     return jsonify({"ok": True, "message": f"Đã cập nhật secret cho '{name}'"})
 
 # ── Auth endpoint ─────────────────────────────────────────────────────────────
