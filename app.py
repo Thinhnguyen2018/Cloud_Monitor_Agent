@@ -523,6 +523,8 @@ def fetch_gn_token(client_id, client_secret):
         headers={"Authorization": f"Basic {b64}", "Content-Type": "application/x-www-form-urlencoded"},
         data="grant_type=client_credentials&scope=email",
         verify=False, timeout=15)
+    if r.status_code == 429:
+        raise requests.exceptions.HTTPError("429 Too Many Requests — IAM rate limit, will retry next cycle", response=r)
     r.raise_for_status()
     data = r.json()
     token      = data.get("access_token") or data.get("accessToken")
@@ -3372,7 +3374,7 @@ def _run_cpu_ram_alerts():
 
 
 # Schedule CPU/RAM alert every 5 minutes
-scheduler.add_job(_run_cpu_ram_alerts, trigger="interval", minutes=1,
+scheduler.add_job(_run_cpu_ram_alerts, trigger="interval", minutes=5,
                   id="cpu_ram_alerts", replace_existing=True)
 
 # ── Serve static chatbot UI ───────────────────────────────────────────────────

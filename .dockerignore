@@ -1,0 +1,10 @@
+credentials.db
+agent.db
+.env
+.greennode.json
+.agentbase/
+vapid_keys.json
+__pycache__/
+*.pyc
+*.pyo
+.git/
