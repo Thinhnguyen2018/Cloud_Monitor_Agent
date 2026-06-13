@@ -492,6 +492,7 @@ GN_MAAS_MODEL       = os.getenv("GN_MAAS_MODEL", "google/gemma-4-31b-it")
 GN_TOKEN_URL        = "https://iamapis.vngcloud.vn/accounts-api/v2/auth/token"
 GN_USERINFO_URL     = "https://iamapis.vngcloud.vn/accounts-api/v1/auth/userinfo"
 GN_API_BASE         = "https://hcm-3.api.vngcloud.vn/vserver/vserver-gateway"
+PROXY_TOKEN_URL     = os.getenv("PROXY_TOKEN_URL", "")  # if set, use proxy instead of direct IAM
 
 # ── Token cache (in-memory, thread-safe) ─────────────────────────────────────
 _token_cache    = {}   # key: client_id → {token, expires_at, user_info}
@@ -526,6 +527,21 @@ def fetch_gn_token(client_id, client_secret):
     if retry_after and datetime.utcnow() < retry_after:
         wait_secs = int((retry_after - datetime.utcnow()).total_seconds())
         raise Exception(f"IAM rate limited, thử lại sau {wait_secs}s")
+
+    # Use proxy if configured (avoids IAM rate limit on restricted IPs)
+    if PROXY_TOKEN_URL:
+        admin_token = request.headers.get("X-Admin-Token") if request else None
+        r = requests.post(PROXY_TOKEN_URL,
+            headers={"Content-Type": "application/json",
+                     "X-Admin-Token": os.getenv("ADMIN_TOKEN", ADMIN_PASSWORD)},
+            json={"client_id": client_id, "client_secret": client_secret},
+            verify=False, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        token     = data.get("token")
+        user_info = data.get("user_info", {})
+        set_cached_token(client_id, token, 1740, user_info)
+        return token, user_info
 
     b64 = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
     r = requests.post(GN_TOKEN_URL,
@@ -566,6 +582,32 @@ def gn_api(token, user_id, method, path, body=None):
                          json=body, verify=False, timeout=20)
     return r.status_code, r.json() if r.text else {}
 
+
+# ── Token proxy (for AgentBase deployments behind IAM rate limit) ─────────────
+@app.route("/api/proxy/token", methods=["POST"])
+@admin_required
+def proxy_token():
+    body = request.get_json() or {}
+    client_id     = body.get("client_id", "").strip()
+    client_secret = body.get("client_secret", "").strip()
+    if not client_id or not client_secret:
+        return jsonify({"error": "client_id and client_secret required"}), 400
+    try:
+        b64 = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+        r = requests.post(GN_TOKEN_URL,
+            headers={"Authorization": f"Basic {b64}", "Content-Type": "application/x-www-form-urlencoded"},
+            data="grant_type=client_credentials&scope=email",
+            verify=False, timeout=15)
+        r.raise_for_status()
+        data  = r.json()
+        token = data.get("access_token") or data.get("accessToken")
+        u = requests.get(GN_USERINFO_URL,
+            headers={"Authorization": f"Bearer {token}"},
+            verify=False, timeout=10)
+        user_info = u.json() if u.ok else {}
+        return jsonify({"token": token, "user_info": user_info})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ── Customer credential CRUD ──────────────────────────────────────────────────
 @app.route("/api/customers", methods=["GET"])
