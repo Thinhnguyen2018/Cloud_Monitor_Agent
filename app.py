@@ -583,11 +583,6 @@ def add_customer():
     note          = body.get("note", "").strip()
     if not all([name, client_id, client_secret, project_id]):
         return jsonify({"error": "Cần điền: name, clientId, clientSecret, projectId"}), 400
-    # Validate credentials
-    try:
-        fetch_gn_token(client_id, client_secret)
-    except Exception as e:
-        return jsonify({"error": f"Credentials không hợp lệ: {e}"}), 400
     save_customer(name, client_id, client_secret, project_id, note)
     return jsonify({"ok": True, "message": f"✅ Đã lưu credentials cho '{name}'"})
 
