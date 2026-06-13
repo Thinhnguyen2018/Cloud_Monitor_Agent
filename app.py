@@ -530,10 +530,9 @@ def fetch_gn_token(client_id, client_secret):
 
     # Use proxy if configured (avoids IAM rate limit on restricted IPs)
     if PROXY_TOKEN_URL:
-        admin_token = request.headers.get("X-Admin-Token") if request else None
         r = requests.post(PROXY_TOKEN_URL,
             headers={"Content-Type": "application/json",
-                     "X-Admin-Token": os.getenv("ADMIN_TOKEN", ADMIN_PASSWORD)},
+                     "X-Proxy-Secret": ADMIN_PASSWORD},
             json={"client_id": client_id, "client_secret": client_secret},
             verify=False, timeout=15)
         r.raise_for_status()
@@ -585,8 +584,10 @@ def gn_api(token, user_id, method, path, body=None):
 
 # ── Token proxy (for AgentBase deployments behind IAM rate limit) ─────────────
 @app.route("/api/proxy/token", methods=["POST"])
-@admin_required
 def proxy_token():
+    secret = request.headers.get("X-Proxy-Secret", "")
+    if secret != ADMIN_PASSWORD:
+        return jsonify({"error": "Unauthorized"}), 401
     body = request.get_json() or {}
     client_id     = body.get("client_id", "").strip()
     client_secret = body.get("client_secret", "").strip()
