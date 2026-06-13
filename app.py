@@ -494,8 +494,9 @@ GN_USERINFO_URL     = "https://iamapis.vngcloud.vn/accounts-api/v1/auth/userinfo
 GN_API_BASE         = "https://hcm-3.api.vngcloud.vn/vserver/vserver-gateway"
 
 # ── Token cache (in-memory, thread-safe) ─────────────────────────────────────
-_token_cache = {}   # key: client_id → {token, expires_at, user_info}
-_cache_lock  = threading.Lock()
+_token_cache    = {}   # key: client_id → {token, expires_at, user_info}
+_rate_limit_cache = {} # key: client_id → retry_after datetime
+_cache_lock     = threading.Lock()
 
 def get_cached_token(client_id):
     with _cache_lock:
@@ -511,6 +512,7 @@ def set_cached_token(client_id, token, expires_in, user_info):
             "user_info":  user_info,
             "expires_at": datetime.utcnow() + timedelta(seconds=expires_in - 60)
         }
+        _rate_limit_cache.pop(client_id, None)
 
 def fetch_gn_token(client_id, client_secret):
     """Fetch GreenNode access token using client credentials."""
@@ -518,13 +520,22 @@ def fetch_gn_token(client_id, client_secret):
     if cached:
         return cached["token"], cached["user_info"]
 
+    # Check rate limit cooldown
+    with _cache_lock:
+        retry_after = _rate_limit_cache.get(client_id)
+    if retry_after and datetime.utcnow() < retry_after:
+        wait_secs = int((retry_after - datetime.utcnow()).total_seconds())
+        raise Exception(f"IAM rate limited, thử lại sau {wait_secs}s")
+
     b64 = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
     r = requests.post(GN_TOKEN_URL,
         headers={"Authorization": f"Basic {b64}", "Content-Type": "application/x-www-form-urlencoded"},
         data="grant_type=client_credentials&scope=email",
         verify=False, timeout=15)
     if r.status_code == 429:
-        raise requests.exceptions.HTTPError("429 Too Many Requests — IAM rate limit, will retry next cycle", response=r)
+        with _cache_lock:
+            _rate_limit_cache[client_id] = datetime.utcnow() + timedelta(minutes=5)
+        raise Exception("IAM rate limited (429), thử lại sau 5 phút")
     r.raise_for_status()
     data = r.json()
     token      = data.get("access_token") or data.get("accessToken")
