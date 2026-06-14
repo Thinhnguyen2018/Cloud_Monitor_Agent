@@ -1117,16 +1117,30 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         return ("vm_delete", None, "Bạn muốn xóa VM nào?")
 
     # ── Resize VM ─────────────────────────────────────────────────────────────
-    if any(w in msg for w in ["resize vm", "nâng cấp vm", "đổi flavor", "thay đổi cấu hình"]):
+    if any(w in msg for w in ["resize vm", "nâng cấp vm", "đổi flavor", "thay đổi cấu hình", "resize"]):
         vm = find_vm(msg)
+        # Try flavor ID pattern first (flav-xxx)
         flavor_m = re.search(r'(flav-[\w\-]+)', msg)
         flavor_id = flavor_m.group(1) if flavor_m else None
+        flavor_name = None
+        # If no flavor ID, try to match flavor name from reference list
+        if not flavor_id:
+            all_flavs = ref_flavors()
+            msg_clean = msg.lower().replace(" ", "-").replace("_", "-")
+            for f in all_flavs:
+                fname = f["name"].lower()
+                fname_clean = fname.replace(" ", "-").replace("_", "-")
+                if fname_clean in msg_clean or fname in msg.lower():
+                    flavor_id = f["id"]
+                    flavor_name = f["name"]
+                    break
         if vm and flavor_id:
+            fname = flavor_name or flavor_id
             return ("vm_resize",
-                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"), "flavorId": flavor_id},
-                    f"Resize VM **{vm.get('name')}** sang flavor **{flavor_id}**")
+                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"), "flavorId": flavor_id, "flavorName": fname},
+                    f"Resize VM **{vm.get('name')}** sang flavor **{fname}**")
         hint = f"VM **{vm.get('name')}** hiện dùng flavor `{vm.get('flavor',{}).get('name','?')}`. " if vm else ""
-        return ("vm_resize", None, f"{hint}Hỏi **liệt kê flavor** để xem danh sách, sau đó gõ: **resize vm [tên] sang [flavor_id]**")
+        return ("vm_resize", None, f"{hint}Hỏi **liệt kê flavor** để xem danh sách, sau đó gõ: **resize vm [tên] sang [tên flavor]**")
 
     # ── Delete Volume ─────────────────────────────────────────────────────────
     if any(w in msg for w in ["xóa volume", "xoá volume", "delete volume"]):
