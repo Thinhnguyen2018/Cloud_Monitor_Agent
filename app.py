@@ -3809,5 +3809,37 @@ def push_subscribe():
     return jsonify({"ok": True})
 
 
+@app.route("/api/debug/secgroup-alert", methods=["POST"])
+@admin_required
+def debug_secgroup_alert():
+    """Manually trigger security group alert check and return results."""
+    results = []
+    customers = get_all_customers()
+    for cust in customers:
+        try:
+            token, user_info = fetch_gn_token(cust["client_id"], cust["client_secret"])
+            uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
+            P   = cust["project_id"]
+
+            sv, sd = gn_api(token, uid, "GET", f"v2/{P}/secgroups")
+            secgroups = _parse_list(sd) if sv == 200 else []
+            results.append({"customer": cust["name"], "sg_count": len(secgroups), "sg_status": sv})
+
+            for sg in secgroups:
+                sg_name = sg.get("name", "?")
+                sg_id   = sg.get("uuid") or sg.get("id", "")
+                sv2, rd = gn_api(token, uid, "GET", f"v2/{P}/secgroups/{sg_id}")
+                rules = (rd.get("secgroupRuleEntities") or rd.get("rules") or []) if sv2 == 200 else []
+                rule_warns = []
+                for rule in rules:
+                    msg = _is_dangerous_rule(rule)
+                    if msg:
+                        rule_warns.append(msg)
+                results.append({"sg": sg_name, "sg_id": sg_id, "rules": len(rules), "rule_status": sv2, "warnings": rule_warns, "sample_rule": rules[0] if rules else None})
+        except Exception as e:
+            results.append({"customer": cust["name"], "error": str(e)})
+    return jsonify(results)
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=False)
