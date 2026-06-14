@@ -471,6 +471,16 @@ scheduler = BackgroundScheduler(
 scheduler.start()
 _scheduled_jobs = {}  # job_id → {desc, action, params, creds, run_time, customer}
 
+@app.before_request
+def ensure_scheduler_running():
+    """Restart scheduler if it died after gunicorn fork."""
+    if not scheduler.running:
+        try:
+            scheduler.start()
+            print("[SCHEDULER] Restarted in worker process")
+        except Exception as e:
+            print(f"[SCHEDULER] Restart failed: {e}")
+
 def _restore_scheduled_jobs():
     """On startup: reload pending jobs from DB back into APScheduler."""
     tz = pytz.timezone('Asia/Ho_Chi_Minh')
