@@ -583,8 +583,13 @@ def fetch_gn_token(client_id, client_secret):
         verify=False, timeout=15)
     if r.status_code == 429:
         with _cache_lock:
-            _rate_limit_cache[client_id] = datetime.utcnow() + timedelta(minutes=5)
-        raise Exception("IAM rate limited (429), thử lại sau 5 phút")
+            # Chỉ set nếu chưa có hoặc đã qua — tránh reset timer liên tục
+            existing = _rate_limit_cache.get(client_id)
+            if not existing or datetime.utcnow() >= existing:
+                _rate_limit_cache[client_id] = datetime.utcnow() + timedelta(minutes=5)
+        with _cache_lock:
+            wait = int((_rate_limit_cache[client_id] - datetime.utcnow()).total_seconds())
+        raise Exception(f"IAM rate limited (429), thử lại sau {wait}s")
     r.raise_for_status()
     data = r.json()
     token      = data.get("access_token") or data.get("accessToken")
@@ -632,7 +637,10 @@ def proxy_token():
         token, user_info = fetch_gn_token(client_id, client_secret)
         return jsonify({"token": token, "user_info": user_info})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        err = str(e)
+        if "rate limit" in err.lower() or "429" in err:
+            return jsonify({"error": err}), 429
+        return jsonify({"error": err}), 500
 
 # ── Customer credential CRUD ──────────────────────────────────────────────────
 @app.route("/api/customers", methods=["GET"])
