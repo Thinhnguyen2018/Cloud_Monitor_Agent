@@ -497,10 +497,18 @@ def _restore_scheduled_jobs():
 _restore_scheduled_jobs()
 
 def _seed_token_cache():
-    """Gọi IAM cho tất cả customers khi server start để cache token sẵn."""
+    """Xóa cache cũ rồi fetch token mới cho tất cả customers khi server start."""
     import time
     def _do_seed():
         time.sleep(5)  # Đợi app init xong
+        # Xóa cache cũ để tránh userId stale sau redeploy
+        try:
+            con, cur = get_db()
+            cur.execute("DELETE FROM token_cache")
+            con.commit()
+            print("[SEED] Cleared old token cache")
+        except Exception as e:
+            print(f"[SEED] Cannot clear token cache: {e}")
         try:
             rows = get_all_customers()
         except Exception as e:
