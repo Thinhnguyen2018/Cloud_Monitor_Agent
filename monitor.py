@@ -130,6 +130,8 @@ def run_secgroup_alerts():
             if warnings:
                 detail = "\n".join(warnings[:10])
                 db_write_notification(cust["name"], f"🔴 {len(warnings)} quy tắc Security Group không an toàn", detail, "danger")
+            else:
+                db_write_notification(cust["name"], f"[DEBUG] Secgroup OK - {len(secgroups)} SGs checked", f"No dangerous rules found", "warning")
         except Exception as e:
             print(f"[MONITOR] secgroup error for {cust['name']}: {e}")
             db_write_notification(cust["name"], "[DEBUG] SECGROUP_ALERT error", str(e), "danger")
@@ -156,6 +158,15 @@ CPU_RAM_INTERVAL  = 5  * 60
 
 def main():
     print("[MONITOR] Ready")
+    # Write startup notification to confirm monitor.py is running and DB is accessible
+    try:
+        customers = get_all_customers()
+        for cust in customers:
+            db_write_notification(cust["name"], "[DEBUG] Monitor process started", f"customers={len(customers)}", "warning")
+        print(f"[MONITOR] Startup notification written, {len(customers)} customers found")
+    except Exception as e:
+        print(f"[MONITOR] Startup DB write failed: {e}")
+
     last = {"secgroup": 0, "health": 0, "cpu_ram": 0}
     while True:
         now = time.time()
