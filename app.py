@@ -503,9 +503,11 @@ def _seed_token_cache():
         time.sleep(5)  # Đợi app init xong
         # Xóa cache cũ để tránh userId stale sau redeploy
         try:
-            con, cur = get_db()
+            con = get_conn()
+            cur = con.cursor()
             cur.execute("DELETE FROM token_cache")
             con.commit()
+            con.close()
             print("[SEED] Cleared old token cache")
         except Exception as e:
             print(f"[SEED] Cannot clear token cache: {e}")
@@ -1058,13 +1060,8 @@ def detect_action_intent(message, vms, sgs, volumes=[], wan_ips=[]):
                         break
         if vm:
             # Get networkInterfaceId from first internalInterface of target VM
-            print(f"[FIP_ASSOC] internalInterfaces: {vm.get('internalInterfaces', [])}")
             for iface in vm.get("internalInterfaces", []):
-                print(f"[FIP_ASSOC] iface keys: {list(iface.keys())}")
-                interface_id = (iface.get("networkInterfaceId")
-                                or iface.get("portId")
-                                or iface.get("id")
-                                or iface.get("uuid", ""))
+                interface_id = iface.get("uuid", "")
                 if interface_id:
                     break
             return ("fip_associate",
@@ -1554,8 +1551,10 @@ def chat():
         s3, d3 = gn_api(token, uid, "GET", f"v2/{P}/networks")
         if s3 == 200: networks = d3.get("listData", [])
         s4, d4 = gn_api(token, uid, "GET", f"v2/{P}/wan-ips")
-        print(f"[WAN_IPS] status={s4} keys={list(d4.keys()) if isinstance(d4,dict) else 'list'} sample={str(d4)[:300]}")
-        if s4 == 200: wan_ips = d4.get("listData", [])
+        if s4 == 200:
+            wan_ips = d4.get("listData", [])
+        else:
+            print(f"[WAN_IPS] status={s4} response={str(d4)[:200]}")
         def _parse_api(status, data):
             """Safely extract list from any GreenNode API response shape."""
             if status not in (200, 201): return []
