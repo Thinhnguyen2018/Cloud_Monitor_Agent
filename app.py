@@ -312,8 +312,9 @@ def db_write_notification(customer, title, body, ntype="info"):
         conn = get_conn(); cur = conn.cursor()
         # Avoid duplicate alert: skip if same customer+title unresolved within 5 minutes
         time_expr = "NOW() - INTERVAL '5 minutes'" if (USE_PG and DATABASE_URL) else "datetime('now', '-5 minutes')"
+        resolved_false = "false" if (USE_PG and DATABASE_URL) else "0"
         cur.execute(f"""SELECT id FROM notifications
-            WHERE customer={_PH} AND title={_PH} AND resolved=0
+            WHERE customer={_PH} AND title={_PH} AND resolved={resolved_false}
             AND created_at >= {time_expr}
             LIMIT 1""", (customer, title))
         if cur.fetchone():
@@ -3202,13 +3203,14 @@ def get_alerts():
     """Get unresolved warning/danger notifications for alert panel."""
     customer = request.args.get("customer", "")
     conn = get_conn(); cur = conn.cursor()
+    resolved_false = "false" if (USE_PG and DATABASE_URL) else "0"
     if customer:
         cur.execute(f"""SELECT id,customer,title,body,type,created_at FROM notifications
-            WHERE customer={_PH} AND type IN ('warning','danger') AND resolved=0
+            WHERE customer={_PH} AND type IN ('warning','danger') AND resolved={resolved_false}
             ORDER BY created_at DESC LIMIT 50""", (customer,))
     else:
-        cur.execute("""SELECT id,customer,title,body,type,created_at FROM notifications
-            WHERE type IN ('warning','danger') AND resolved=0
+        cur.execute(f"""SELECT id,customer,title,body,type,created_at FROM notifications
+            WHERE type IN ('warning','danger') AND resolved={resolved_false}
             ORDER BY created_at DESC LIMIT 50""")
     rows = cur.fetchall()
     conn.close()

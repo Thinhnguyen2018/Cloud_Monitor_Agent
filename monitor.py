@@ -33,7 +33,8 @@ def db_write_notification(customer, title, body, ntype="info"):
         cur = conn.cursor()
         ph = "%s" if DATABASE_URL else "?"
         time_expr = "NOW() - INTERVAL '5 minutes'" if DATABASE_URL else "datetime('now', '-5 minutes')"
-        cur.execute(f"SELECT id FROM notifications WHERE customer={ph} AND title={ph} AND resolved=0 AND created_at >= {time_expr} LIMIT 1", (customer, title))
+        resolved_false = "false" if DATABASE_URL else "0"
+        cur.execute(f"SELECT id FROM notifications WHERE customer={ph} AND title={ph} AND resolved={resolved_false} AND created_at >= {time_expr} LIMIT 1", (customer, title))
         if cur.fetchone():
             conn.close(); return
         cur.execute(f"INSERT INTO notifications (customer,title,body,type) VALUES ({ph},{ph},{ph},{ph})", (customer, title, body, ntype))
