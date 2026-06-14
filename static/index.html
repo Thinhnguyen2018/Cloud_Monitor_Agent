@@ -893,6 +893,7 @@ function scrollChat() { const c = document.getElementById('chat'); c.scrollTop =
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function md2html(text) {
+  if (!text) return '';
   let t = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   t = t.replace(/((?:^\|.+\|\s*\n?)+)/gm, block => {
     const rows = block.trim().split('\n').filter(r => r.trim());
