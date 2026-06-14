@@ -3460,9 +3460,7 @@ def _run_health_alerts():
         except Exception as e:
             print(f"[HEALTH_ALERT] {cust['name']}: {e}")
 
-# Schedule health alert every 30 minutes
-scheduler.add_job(_run_health_alerts, trigger="interval", minutes=30,
-                  id="health_alerts", replace_existing=True)
+# Health/secgroup/cpu-ram monitoring handled by monitor.py process
 
 
 # ── Security Group Alert ───────────────────────────────────────────────────────
@@ -3539,9 +3537,6 @@ def _run_secgroup_alerts():
             db_write_notification(cust["name"], f"[DEBUG] SECGROUP_ALERT error", str(e), ntype="danger")
 
 
-# Schedule security group check every 1 minute (test mode)
-scheduler.add_job(_run_secgroup_alerts, trigger="interval", minutes=1,
-                  id="secgroup_alerts", replace_existing=True)
 
 
 # ── CPU/RAM Alert ─────────────────────────────────────────────────────────────
@@ -3582,9 +3577,7 @@ def _run_cpu_ram_alerts():
             print(f"[CPU_RAM_ALERT] {cust['name']}: {e}")
 
 
-# Schedule CPU/RAM alert every 5 minutes
-scheduler.add_job(_run_cpu_ram_alerts, trigger="interval", minutes=5,
-                  id="cpu_ram_alerts", replace_existing=True)
+# CPU/RAM monitoring handled by monitor.py process
 
 # ── Serve static chatbot UI ───────────────────────────────────────────────────
 @app.route("/")
