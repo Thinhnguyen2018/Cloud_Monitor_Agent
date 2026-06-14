@@ -1010,7 +1010,8 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         missing = f"tên VM{' ✓' if vm else ' ✗'} và tên Volume{' ✓' if vol else ' ✗'}"
         return ("volume_attach", None, f"Không tìm thấy: {missing}. Hỏi 'liệt kê volume' để xem danh sách.")
 
-    if any(w in msg for w in ["gỡ volume", "detach volume", "tháo disk", "gỡ disk", "muốn gỡ", "gỡ khỏi"]):
+    if any(w in msg for w in ["gỡ volume", "detach volume", "tháo disk", "gỡ disk", "muốn gỡ", "gỡ khỏi"]) \
+            and not any(w in msg for w in ["floating", "wan", " ip "]):
         vm = find_vm(msg)
         vol = find_volume(msg)
         if vm and vol:
@@ -1041,7 +1042,7 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
                      "wanIpId": wan_ip_id, "floatingIp": fip_addr},
                     f"Gắn Floating IP **{fip_addr or '?'}** vào VM **{vm.get('name')}**")
         return ("fip_associate", None, "Cần biết tên VM và địa chỉ Floating IP cần gắn")
-    if any(w in msg for w in ["gỡ floating", "disassociate ip", "gỡ ip công cộng", "gỡ wan", "gỡ ip"]):
+    if any(w in msg for w in ["gỡ floating", "disassociate ip", "gỡ ip công cộng", "gỡ wan", "gỡ ip", "muốn gỡ floating", "muốn gỡ ip"]):
         vm = find_vm(msg)
         if vm:
             # Floating IP is attached to internalInterfaces
