@@ -997,9 +997,15 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         if vm and vol:
             vol_id   = vol.get("uuid") or vol.get("id") or vol.get("volumeId")
             vol_name = vol.get("name") or vol.get("volumeName")
+            _vol_id = str(vol_id or "")
+            if _vol_id and not _vol_id.startswith("vol-"):
+                _vol_id = "vol-" + _vol_id
+            _srv_id = str(vm.get("uuid") or "")
+            if _srv_id and not _srv_id.startswith("ins-"):
+                _srv_id = "ins-" + _srv_id
             return ("volume_detach",
-                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
-                     "volumeId": vol_id, "volumeName": vol_name},
+                    {"serverId": _srv_id, "serverName": vm.get("name"),
+                     "volumeId": _vol_id, "volumeName": vol_name},
                     f"Gỡ volume **{vol_name}** khỏi VM **{vm.get('name')}**")
         return ("volume_detach", None, "Không tìm thấy VM hoặc Volume. Hỏi 'liệt kê volume' để xem danh sách.")
 
