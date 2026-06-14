@@ -633,9 +633,12 @@ def proxy_token():
             headers={"Authorization": f"Basic {b64}", "Content-Type": "application/x-www-form-urlencoded"},
             data="grant_type=client_credentials&scope=email",
             verify=False, timeout=15)
-        r.raise_for_status()
+        if r.status_code != 200:
+            return jsonify({"error": f"IAM error {r.status_code}", "detail": r.text[:300]}), r.status_code
         data  = r.json()
         token = data.get("access_token") or data.get("accessToken")
+        if not token:
+            return jsonify({"error": "No token in IAM response", "detail": str(data)[:300]}), 502
         u = requests.get(GN_USERINFO_URL,
             headers={"Authorization": f"Bearer {token}"},
             verify=False, timeout=10)
