@@ -117,8 +117,4 @@ This agent is deployed on **GreenNode AgentBase** — VNG Cloud's AI agent runti
 
 **Team 43** — Claw-a-thon 2026 · Track: Automation & Integration
 
----
 
-## License
-
-MIT
