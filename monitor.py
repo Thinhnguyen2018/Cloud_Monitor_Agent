@@ -67,9 +67,14 @@ def fetch_token(client_id, client_secret):
 def gn_api(token, uid, method, path, body=None):
     import requests
     base = "https://hcm-3.api.vngcloud.vn/vserver/vserver-gateway"
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "X-User-Id": str(uid)}
+    headers = {
+        "Authorization":    f"Bearer {token}",
+        "Content-Type":     "application/json",
+        "portal-user-id":   str(uid),
+        "x-portal-user-id": str(uid),
+    }
     url = f"{base}/{path}"
-    r = requests.request(method, url, json=body, headers=headers, timeout=15)
+    r = requests.request(method, url, json=body, headers=headers, verify=False, timeout=20)
     try:
         return r.status_code, r.json()
     except Exception:
