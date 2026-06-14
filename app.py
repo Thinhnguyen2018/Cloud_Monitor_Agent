@@ -1192,8 +1192,9 @@ def detect_action_intent(message, vms, sgs, volumes=[], wan_ips=[]):
             vol_name = vol.get("name") or vol.get("volumeName")
             if "boot" in (vol_name or "").lower():
                 return (None, None, "Không thể xóa boot volume!")
+            vol_id = (vol.get("uuid") or vol.get("id") or vol.get("volumeId") or "")
             return ("volume_delete",
-                    {"volumeId": vol.get("uuid"), "volumeName": vol_name},
+                    {"volumeId": vol_id, "volumeName": vol_name},
                     f"⚠️ XÓA VĨNH VIỄN Volume **{vol_name}** — không thể khôi phục!")
         return ("volume_delete", None, "Bạn muốn xóa Volume nào?")
 
@@ -3002,7 +3003,9 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     # ── Delete Volume ─────────────────────────────────────────────────────────
     # DELETE /v2/{projectId}/volumes/{volumeId}
     if action_type == "volume_delete":
-        volume_id = params.get("volumeId")
+        volume_id = params.get("volumeId") or params.get("volumeName", "")
+        if volume_id and not str(volume_id).startswith("vol-"):
+            volume_id = "vol-" + volume_id
         s, d = gn_api(token, uid, "DELETE", f"v2/{P}/volumes/{volume_id}")
         return s in OK, d
 
