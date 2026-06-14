@@ -1058,8 +1058,13 @@ def detect_action_intent(message, vms, sgs, volumes=[], wan_ips=[]):
                         break
         if vm:
             # Get networkInterfaceId from first internalInterface of target VM
+            print(f"[FIP_ASSOC] internalInterfaces: {vm.get('internalInterfaces', [])}")
             for iface in vm.get("internalInterfaces", []):
-                interface_id = iface.get("uuid", "")
+                print(f"[FIP_ASSOC] iface keys: {list(iface.keys())}")
+                interface_id = (iface.get("networkInterfaceId")
+                                or iface.get("portId")
+                                or iface.get("id")
+                                or iface.get("uuid", ""))
                 if interface_id:
                     break
             return ("fip_associate",
