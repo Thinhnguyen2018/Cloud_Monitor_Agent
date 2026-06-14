@@ -3506,13 +3506,14 @@ def _run_secgroup_alerts():
                 sg_id   = sg.get("uuid") or sg.get("id", "")
                 if not sg_id:
                     continue
-                # Try both rule endpoints
-                sv2, rd = gn_api(token, uid, "GET", f"v2/{P}/secgroups/{sg_id}/secGroupRules")
-                if sv2 != 200:
-                    sv2, rd = gn_api(token, uid, "GET", f"v2/{P}/secgroups/{sg_id}/rules")
-                rules = _parse_list(rd) if sv2 == 200 else []
-                # Also check inline rules if present
-                inline = sg.get("secGroupRuleInfoSet") or sg.get("rules") or []
+                # Get SG detail to extract rules (same as sg_list_rules in chat)
+                sv2, rd = gn_api(token, uid, "GET", f"v2/{P}/secgroups/{sg_id}")
+                rules = (rd.get("secgroupRuleEntities")
+                         or rd.get("rules")
+                         or rd.get("data", {}).get("secgroupRuleEntities", [])
+                         or []) if sv2 == 200 else []
+                # Also check inline rules from list response
+                inline = sg.get("secGroupRuleInfoSet") or sg.get("secgroupRuleEntities") or []
                 for rule in (rules or inline):
                     msg = _is_dangerous_rule(rule)
                     if msg:
