@@ -628,21 +628,8 @@ def proxy_token():
     if not client_id or not client_secret:
         return jsonify({"error": "client_id and client_secret required"}), 400
     try:
-        b64 = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
-        r = requests.post(GN_TOKEN_URL,
-            headers={"Authorization": f"Basic {b64}", "Content-Type": "application/x-www-form-urlencoded"},
-            data="grant_type=client_credentials&scope=email",
-            verify=False, timeout=15)
-        if r.status_code != 200:
-            return jsonify({"error": f"IAM error {r.status_code}", "detail": r.text[:300]}), r.status_code
-        data  = r.json()
-        token = data.get("access_token") or data.get("accessToken")
-        if not token:
-            return jsonify({"error": "No token in IAM response", "detail": str(data)[:300]}), 502
-        u = requests.get(GN_USERINFO_URL,
-            headers={"Authorization": f"Bearer {token}"},
-            verify=False, timeout=10)
-        user_info = u.json() if u.ok else {}
+        # Dùng fetch_gn_token để tận dụng token cache — tránh gọi IAM liên tục
+        token, user_info = fetch_gn_token(client_id, client_secret)
         return jsonify({"token": token, "user_info": user_info})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
