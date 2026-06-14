@@ -1049,7 +1049,9 @@ def detect_action_intent(message, vms, sgs, volumes=[], wan_ips=[]):
         wan_ip_id = fip_addr  # fallback
         interface_id = ""
         for w in wan_ips:
-            if w.get("address") == fip_addr or w.get("ip") == fip_addr:
+            w_ip = (w.get("address") or w.get("ip") or w.get("floatingIp")
+                    or w.get("publicIp") or w.get("ipAddress", ""))
+            if w_ip == fip_addr:
                 wan_ip_id = w.get("uuid") or w.get("id") or fip_addr
                 break
         if wan_ip_id == fip_addr:  # not found yet, try VM interfaces
@@ -1550,11 +1552,15 @@ def chat():
         if s2 == 200: volumes = d2.get("listData", [])
         s3, d3 = gn_api(token, uid, "GET", f"v2/{P}/networks")
         if s3 == 200: networks = d3.get("listData", [])
-        s4, d4 = gn_api(token, uid, "GET", f"v2/{P}/wan-ips")
-        if s4 == 200:
-            wan_ips = d4.get("listData", [])
-        else:
-            print(f"[WAN_IPS] status={s4} response={str(d4)[:200]}")
+        # Try multiple endpoints to get standalone floating IP list
+        for _wip_path in [f"v2/{P}/wan-ips", f"v2/{P}/floatingips", f"v2/{P}/external-interfaces"]:
+            s4, d4 = gn_api(token, uid, "GET", _wip_path)
+            if s4 == 200:
+                wan_ips = (d4.get("listData") or d4.get("data") or
+                           (d4 if isinstance(d4, list) else []))
+                if wan_ips:
+                    break
+            print(f"[WAN_IPS] {_wip_path} status={s4} sample={str(d4)[:150]}")
         def _parse_api(status, data):
             """Safely extract list from any GreenNode API response shape."""
             if status not in (200, 201): return []
