@@ -3464,17 +3464,20 @@ def _is_dangerous_rule(rule):
     if direction != "ingress":
         return None
 
-    remote = rule.get("remoteIpPrefix") or ""
+    remote = rule.get("remoteIpPrefix") or rule.get("remote_ip_prefix") or ""
     if remote not in ("0.0.0.0/0", "::/0", ""):
         return None
 
     proto    = (rule.get("protocol") or "").lower()
-    port_min = rule.get("portRangeMin")
-    port_max = rule.get("portRangeMax")
+    port_min = rule.get("portRangeMin") if rule.get("portRangeMin") is not None else rule.get("port_range_min")
+    port_max = rule.get("portRangeMax") if rule.get("portRangeMax") is not None else rule.get("port_range_max")
 
-    # All ports open
-    if proto == "any" or (port_min == 0 and port_max == 65535):
+    # All ports open (range 0-65535 or 1-65535 or protocol=any)
+    if proto in ("any", "") or proto is None:
         return f"Tất cả port mở từ 0.0.0.0/0"
+    if port_min is not None and port_max is not None:
+        if int(port_min) <= 1 and int(port_max) >= 65534:
+            return f"Tất cả port mở từ 0.0.0.0/0"
 
     # Range covers dangerous port
     if port_min is not None and port_max is not None:
@@ -3500,12 +3503,17 @@ def _run_secgroup_alerts():
             warnings = []
             for sg in secgroups:
                 sg_name = sg.get("name", "?")
-                sg_id   = sg.get("id", "")
+                sg_id   = sg.get("uuid") or sg.get("id", "")
                 if not sg_id:
                     continue
+                # Try both rule endpoints
                 sv2, rd = gn_api(token, uid, "GET", f"v2/{P}/secgroups/{sg_id}/secGroupRules")
+                if sv2 != 200:
+                    sv2, rd = gn_api(token, uid, "GET", f"v2/{P}/secgroups/{sg_id}/rules")
                 rules = _parse_list(rd) if sv2 == 200 else []
-                for rule in rules:
+                # Also check inline rules if present
+                inline = sg.get("secGroupRuleInfoSet") or sg.get("rules") or []
+                for rule in (rules or inline):
                     msg = _is_dangerous_rule(rule)
                     if msg:
                         warnings.append(f"[{sg_name}] {msg}")
