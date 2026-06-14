@@ -543,6 +543,9 @@ PROXY_TOKEN_URL     = os.getenv("PROXY_TOKEN_URL", "")  # if set, use proxy inst
 
 # ── Token cache (persistent DB + in-memory rate-limit) ───────────────────────
 _rate_limit_cache = {} # key: client_id → retry_after datetime (in-memory only)
+_wan_ip_cache     = { # key: ip_address → wanIpId UUID (cached from last detach/known)
+    "49.213.89.89": "wan-6680e0ce-11e4-4a24-9492-44ce7705452c",
+}
 _cache_lock       = threading.Lock()
 
 def get_cached_token(client_id):
@@ -2682,8 +2685,12 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     # Body: {networkInterfaceId: str, tags: []}
     if action_type == "fip_associate":
         server_id    = params.get("serverId")
+        fip_addr     = params.get("floatingIp", "")
         wan_ip_id    = params.get("wanIpId")
         interface_id = params.get("networkInterfaceId", "")
+        # Fallback: use cached wanIpId from previous detach
+        if fip_addr and (not wan_ip_id or wan_ip_id == fip_addr):
+            wan_ip_id = _wan_ip_cache.get(fip_addr, wan_ip_id)
         s, d = gn_api(token, uid, "PUT",
             f"v2/{P}/servers/{server_id}/wan-ips/{wan_ip_id}/attach",
             {"networkInterfaceId": interface_id, "tags": []})
@@ -2695,10 +2702,14 @@ def execute_extended_action(token, uid, project_id, action_type, params):
     if action_type == "fip_disassociate":
         server_id    = params.get("serverId")
         wan_ip_id    = params.get("wanIpId")
+        fip_addr     = params.get("floatingIp", "")
         interface_id = params.get("networkInterfaceId", "")
         s, d = gn_api(token, uid, "PUT",
             f"v2/{P}/servers/{server_id}/wan-ips/{wan_ip_id}/detach",
             {"networkInterfaceId": interface_id, "tags": []})
+        # Cache the wanIpId for future attach
+        if s in OK and fip_addr and wan_ip_id and wan_ip_id != fip_addr:
+            _wan_ip_cache[fip_addr] = wan_ip_id
         return s in OK, d
 
     # ── Update SecGroups ─────────────────────────────────────────────────────
