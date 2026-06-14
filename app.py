@@ -3528,8 +3528,8 @@ def _run_secgroup_alerts():
             print(f"[SECGROUP_ALERT] {cust['name']}: {e}")
 
 
-# Schedule security group check every 15 minutes
-scheduler.add_job(_run_secgroup_alerts, trigger="interval", minutes=15,
+# Schedule security group check every 1 minute (test mode)
+scheduler.add_job(_run_secgroup_alerts, trigger="interval", minutes=1,
                   id="secgroup_alerts", replace_existing=True)
 
 
