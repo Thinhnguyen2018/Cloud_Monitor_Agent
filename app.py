@@ -345,6 +345,14 @@ try:
 except Exception as e:
     print(f"[STARTUP] DB init failed: {e}")
 
+try:
+    _c = get_conn(); _cur = _c.cursor()
+    _cur.execute("DELETE FROM token_cache")
+    _c.commit(); _c.close()
+    print("[STARTUP] Token cache cleared")
+except Exception as e:
+    print(f"[STARTUP] Token cache clear failed: {e}")
+
 def get_all_customers():
     conn = get_conn()
     cur  = conn.cursor()
@@ -501,16 +509,6 @@ def _seed_token_cache():
     import time
     def _do_seed():
         time.sleep(5)  # Đợi app init xong
-        # Xóa cache cũ để tránh userId stale sau redeploy
-        try:
-            con = get_conn()
-            cur = con.cursor()
-            cur.execute("DELETE FROM token_cache")
-            con.commit()
-            con.close()
-            print("[SEED] Cleared old token cache")
-        except Exception as e:
-            print(f"[SEED] Cannot clear token cache: {e}")
         try:
             rows = get_all_customers()
         except Exception as e:
