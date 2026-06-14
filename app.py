@@ -496,6 +496,27 @@ def _restore_scheduled_jobs():
 
 _restore_scheduled_jobs()
 
+def _seed_token_cache():
+    """Gọi IAM cho tất cả customers khi server start để cache token sẵn."""
+    import time
+    def _do_seed():
+        time.sleep(5)  # Đợi app init xong
+        try:
+            rows = get_all_customers()
+        except Exception as e:
+            print(f"[SEED] Cannot load customers: {e}")
+            return
+        for row in rows:
+            name = row.get("name", "?")
+            try:
+                token, _ = fetch_gn_token(row["client_id"], row["client_secret"])
+                print(f"[SEED] Token cached for {name}")
+            except Exception as e:
+                print(f"[SEED] Failed for {name}: {e}")
+    threading.Thread(target=_do_seed, daemon=True).start()
+
+_seed_token_cache()
+
 @app.after_request
 def add_headers(response):
     response.headers['ngrok-skip-browser-warning'] = 'true'
