@@ -817,7 +817,7 @@ def resources():
 
 # ── Chat endpoint: real-time GN data + Claude ────────────────────────────────
 # ── Intent detection helpers ─────────────────────────────────────────────────
-def detect_action_intent(message, vms, sgs, volumes=[]):
+def detect_action_intent(message, vms, sgs, volumes=[], wan_ips=[]):
     """
     Detect if user wants to execute an action.
     Returns (action_type, params, description) or (None, None, None).
@@ -1043,11 +1043,21 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         vm = find_vm(msg)
         ip_match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', msg)
         fip_addr = ip_match.group(1) if ip_match else None
-        # Find wanIpId from networks/floating IPs list
-        wan_ip_id = fip_addr  # fallback to IP address if no ID found
+        # Lookup wanIpId UUID: first from standalone wan_ips list, then from VM interfaces
+        wan_ip_id = fip_addr  # fallback
+        interface_id = ""
+        for w in wan_ips:
+            if w.get("address") == fip_addr or w.get("ip") == fip_addr:
+                wan_ip_id = w.get("uuid") or w.get("id") or fip_addr
+                break
+        if wan_ip_id == fip_addr:  # not found yet, try VM interfaces
+            for v in vms:
+                for iface in v.get("internalInterfaces", []):
+                    if iface.get("floatingIp") == fip_addr and iface.get("floatingIpId"):
+                        wan_ip_id = iface["floatingIpId"]
+                        break
         if vm:
-            # Get networkInterfaceId from first internalInterface
-            interface_id = ""
+            # Get networkInterfaceId from first internalInterface of target VM
             for iface in vm.get("internalInterfaces", []):
                 interface_id = iface.get("uuid", "")
                 if interface_id:
@@ -1531,13 +1541,15 @@ def chat():
         uid = str(user_info.get("accountId") or user_info.get("userId", "0"))
         P   = project_id
 
-        vms,  volumes,  networks = [], [], []
+        vms,  volumes,  networks, wan_ips = [], [], [], []
         s1, d1 = gn_api(token, uid, "GET", f"v2/{P}/servers")
         if s1 == 200: vms = d1.get("listData", [])
         s2, d2 = gn_api(token, uid, "GET", f"v2/{P}/volumes")
         if s2 == 200: volumes = d2.get("listData", [])
         s3, d3 = gn_api(token, uid, "GET", f"v2/{P}/networks")
         if s3 == 200: networks = d3.get("listData", [])
+        s4, d4 = gn_api(token, uid, "GET", f"v2/{P}/wan-ips")
+        if s4 == 200: wan_ips = d4.get("listData", [])
         def _parse_api(status, data):
             """Safely extract list from any GreenNode API response shape."""
             if status not in (200, 201): return []
@@ -1889,7 +1901,7 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
 
     # Detect new action intent from this message
     if not confirmed:
-        action_type, params, desc = detect_action_intent(user_message, vms, sgs, volumes)
+        action_type, params, desc = detect_action_intent(user_message, vms, sgs, volumes, wan_ips)
         if action_type and params is not None:
             # Handle schedule intent — execute directly, no confirm needed
             if action_type.startswith("schedule_"):
