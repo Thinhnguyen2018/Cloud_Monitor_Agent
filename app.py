@@ -1554,6 +1554,7 @@ def chat():
         s3, d3 = gn_api(token, uid, "GET", f"v2/{P}/networks")
         if s3 == 200: networks = d3.get("listData", [])
         s4, d4 = gn_api(token, uid, "GET", f"v2/{P}/wan-ips")
+        print(f"[WAN_IPS] status={s4} keys={list(d4.keys()) if isinstance(d4,dict) else 'list'} sample={str(d4)[:300]}")
         if s4 == 200: wan_ips = d4.get("listData", [])
         def _parse_api(status, data):
             """Safely extract list from any GreenNode API response shape."""
