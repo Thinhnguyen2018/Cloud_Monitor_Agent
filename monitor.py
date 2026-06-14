@@ -133,7 +133,7 @@ def run_health_alerts():
         except Exception as e:
             print(f"[MONITOR] health error for {cust['name']}: {e}")
 
-SECGROUP_INTERVAL = 15 * 60  # 15 minutes
+SECGROUP_INTERVAL = 60  # 1 minute (test)
 HEALTH_INTERVAL   = 30 * 60
 CPU_RAM_INTERVAL  = 5  * 60
 
