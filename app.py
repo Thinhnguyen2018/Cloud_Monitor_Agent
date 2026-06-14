@@ -992,7 +992,8 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
                     return vol
         return None
 
-    if any(w in msg for w in ["gắn volume", "attach volume", "gắn disk", "muốn gắn", "gắn vào"]):
+    if any(w in msg for w in ["gắn volume", "attach volume", "gắn disk", "muốn gắn", "gắn vào"]) \
+            and not any(w in msg for w in ["floating", "wan", " ip "]):
         vm = find_vm(msg)
         vol = find_volume(msg)
         if vm and vol:
@@ -1045,9 +1046,16 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
         # Find wanIpId from networks/floating IPs list
         wan_ip_id = fip_addr  # fallback to IP address if no ID found
         if vm:
+            # Get networkInterfaceId from first internalInterface
+            interface_id = ""
+            for iface in vm.get("internalInterfaces", []):
+                interface_id = iface.get("uuid", "")
+                if interface_id:
+                    break
             return ("fip_associate",
                     {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
-                     "wanIpId": wan_ip_id, "floatingIp": fip_addr},
+                     "wanIpId": wan_ip_id, "floatingIp": fip_addr,
+                     "networkInterfaceId": interface_id},
                     f"Gắn Floating IP **{fip_addr or '?'}** vào VM **{vm.get('name')}**")
         return ("fip_associate", None, "Cần biết tên VM và địa chỉ Floating IP cần gắn")
     if any(w in msg for w in ["gỡ floating", "disassociate ip", "gỡ ip công cộng", "gỡ wan", "gỡ ip", "muốn gỡ floating", "muốn gỡ ip"]):
