@@ -17,7 +17,6 @@ An AI-powered cloud infrastructure management agent for VNG Cloud, built for **C
 | Start / Stop / Reboot | "tắt vm web-server", "khởi động lại db-01" |
 | Create VM | "tạo vm mới" |
 | Delete VM | "xóa vm test-server" |
-| Resize (change flavor) | "nâng cấp vm app-01 sang flavor mới" |
 | Rename | "đổi tên vm old-name thành new-name" |
 | Snapshot | "tạo snapshot cho vm web-server" |
 
