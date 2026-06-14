@@ -1044,12 +1044,21 @@ def detect_action_intent(message, vms, sgs, volumes=[]):
     if any(w in msg for w in ["gỡ floating", "disassociate ip", "gỡ ip công cộng", "gỡ wan", "gỡ ip"]):
         vm = find_vm(msg)
         if vm:
-            # Get current WAN IP from VM info
-            wan_ips = vm.get("externalInterfaces", []) or vm.get("wanIps", [])
-            wan_ip_id = wan_ips[0].get("uuid") if wan_ips else None
+            # Floating IP is attached to internalInterfaces
+            wan_ip_id = None
+            interface_id = ""
+            fip_addr = ""
+            for iface in vm.get("internalInterfaces", []):
+                if iface.get("floatingIp"):
+                    wan_ip_id    = iface.get("floatingIpId", "")
+                    interface_id = iface.get("uuid", "")
+                    fip_addr     = iface.get("floatingIp", "")
+                    break
             return ("fip_disassociate",
-                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"), "wanIpId": wan_ip_id},
-                    f"Gỡ Floating IP khỏi VM **{vm.get('name')}**")
+                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
+                     "wanIpId": wan_ip_id, "networkInterfaceId": interface_id,
+                     "floatingIp": fip_addr},
+                    f"Gỡ Floating IP **{fip_addr}** khỏi VM **{vm.get('name')}**")
         return ("fip_disassociate", None, "Bạn muốn gỡ Floating IP khỏi VM nào?")
 
     # ── Rename ────────────────────────────────────────────────────────────────
