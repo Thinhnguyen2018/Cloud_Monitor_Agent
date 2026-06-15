@@ -118,41 +118,16 @@ def run_health_alerts():
         except Exception as e:
             print(f"[MONITOR] health error for {cust['name']}: {e}")
 
-VMONITOR_BASE = "https://vmonitor.console.vngcloud.vn/vmonitor-api/api/v1"
+VMONITOR_BASE = "https://vmonitor.console.vngcloud.vn/vmonitor-api/api"
 
-def _vmonitor_cpu_latest(token, vm_id):
-    import requests, time as _time
-    now_ms   = int(_time.time() * 1000)
-    start_ms = now_ms - 15 * 60 * 1000
-    body = {
-        "type": "SIMPLE",
-        "data": {
-            "graph": {
-                "name":       "vserver.cpu.utilization_norm_perc",
-                "dimensions": f"resource_id:{vm_id},product:vserver",
-                "statistics": "avg",
-                "group_by":   "none",
-                "offset": 0, "limit": "", "rollup": "", "rate": 0,
-            },
-            "start_time": start_ms,
-            "end_time":   now_ms,
-            "period":     60,
-            "alarm":      False,
-            "reduction":  None,
-        }
-    }
-    r = requests.post(f"{VMONITOR_BASE}/statistics",
-                      headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                      json=body, verify=False, timeout=15)
-    if not r.ok:
-        return None
-    data = r.json()
-    pts = data[0].get("statistics", []) if isinstance(data, list) and data else []
-    for ts, val in reversed(pts):
-        if val is not None and val != "null":
-            try: return float(val)
-            except: pass
-    return None
+def vmonitor_get(token, path):
+    import requests
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    r = requests.get(f"{VMONITOR_BASE}{path}", headers=headers, verify=False, timeout=15)
+    try:
+        return r.status_code, r.json()
+    except Exception:
+        return r.status_code, {}
 
 def run_cpu_ram_alerts():
     CPU_THRESHOLD = 80
@@ -160,15 +135,23 @@ def run_cpu_ram_alerts():
     for cust in customers:
         try:
             token, info = fetch_token(cust["client_id"], cust["client_secret"])
-            uid = str(info.get("accountId") or info.get("userId", "0"))
-            P   = cust["project_id"]
-            sv, dv = gn_api(token, uid, "GET", f"v2/{P}/servers")
-            vms = parse_list(dv) if sv == 200 else []
-            for vm in vms:
-                vm_id = vm.get("uuid") or vm.get("id", "")
-                name  = vm.get("name", "?")
-                cpu   = _vmonitor_cpu_latest(token, vm_id)
-                print(f"[CPU] {name} cpu={cpu}")
+            # Get vserver hosts from vMonitor
+            st, data = vmonitor_get(token, "/v1/infrastructure/vserver/hosts?name=&page=1&size=50")
+            if st != 200:
+                print(f"[CPU] vserver/hosts failed: {st}")
+                continue
+            hosts = data.get("lstData", []) if isinstance(data, dict) else []
+            for h in hosts:
+                if not h.get("monitor_enabled"):
+                    continue
+                host_id = h.get("id")
+                name = h.get("server_name") or h.get("server_id", "?")
+                ms, md = vmonitor_get(token, f"/v1/infrastructure/vserver/hosts/{host_id}/metric")
+                print(f"[CPU] {name} metric_status={ms} data={str(md)[:200]}")
+                if ms != 200:
+                    continue
+                cpu_obj = md.get("vServerCPUUsage")
+                cpu = float(cpu_obj.get("value", -1)) if isinstance(cpu_obj, dict) else None
                 if cpu is not None and cpu >= CPU_THRESHOLD:
                     db_write_notification(
                         cust["name"],
