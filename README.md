@@ -19,7 +19,6 @@ An AI-powered cloud infrastructure management agent for VNG Cloud, built for **C
 | Delete VM | "xóa vm test-server" |
 | Rename | "đổi tên vm old-name thành new-name" |
 | Snapshot | "tạo snapshot cho vm web-server" |
-| Resize | "resize vm web-server sang 4vcpu 8gb" |
 
 ### Storage Management
 | Action | Example Command |
