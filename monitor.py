@@ -32,7 +32,7 @@ def db_write_notification(customer, title, body, ntype="info"):
         conn = get_conn()
         cur = conn.cursor()
         ph = "%s" if DATABASE_URL else "?"
-        time_expr = "NOW() - INTERVAL '5 minutes'" if DATABASE_URL else "datetime('now', '-5 minutes')"
+        time_expr = "NOW() - INTERVAL '1 minutes'" if DATABASE_URL else "datetime('now', '-1 minutes')"
         resolved_false = "false" if DATABASE_URL else "0"
         cur.execute(f"SELECT id FROM notifications WHERE customer={ph} AND title={ph} AND resolved={resolved_false} AND created_at >= {time_expr} LIMIT 1", (customer, title))
         if cur.fetchone():
@@ -168,7 +168,7 @@ def run_cpu_ram_alerts():
 
 SECGROUP_INTERVAL = 1 * 60  # 1 minute
 HEALTH_INTERVAL   = 30 * 60
-CPU_RAM_INTERVAL  = 5  * 60
+CPU_RAM_INTERVAL  = 1  * 60
 
 def main():
     last = {"secgroup": 0, "health": 0, "cpu_ram": 0}
