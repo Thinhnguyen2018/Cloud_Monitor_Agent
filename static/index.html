@@ -1033,9 +1033,12 @@ const notifBtn   = document.getElementById('notif-btn');
 const notifPanel = document.getElementById('notif-panel');
 const notifBadge = document.getElementById('notif-badge');
 let notifInterval = null;
+let _notifLoading = false;
 
 async function loadNotifications() {
   if (!currentCustomer) return;
+  if (_notifLoading) return;
+  _notifLoading = true;
   try {
     const r = await apiFetch(`/api/notifications?customer=${encodeURIComponent(currentCustomer.name)}`);
     const d = await r.json();
@@ -1048,19 +1051,20 @@ async function loadNotifications() {
     } else {
       notifBadge.style.display = 'none';
     }
-    // List
+    // List — only update if we got a real response
     const list = document.getElementById('notif-list');
     if (!notifs.length) {
       list.innerHTML = '<div class="notif-empty">Chưa có thông báo</div>';
-      return;
+    } else {
+      list.innerHTML = notifs.map(n => `
+        <div class="notif-item ${n.read ? '' : 'unread'}">
+          <div class="notif-title">${esc(n.title)}</div>
+          <div class="notif-body">${md2html(n.body)}</div>
+          <div class="notif-time">${fmtTime(n.created_at)}</div>
+        </div>`).join('');
     }
-    list.innerHTML = notifs.map(n => `
-      <div class="notif-item ${n.read ? '' : 'unread'}">
-        <div class="notif-title">${esc(n.title)}</div>
-        <div class="notif-body">${md2html(n.body)}</div>
-        <div class="notif-time">${fmtTime(n.created_at)}</div>
-      </div>`).join('');
-  } catch(e) {}
+  } catch(e) { /* keep existing content on error */ }
+  finally { _notifLoading = false; }
 }
 
 notifBtn.addEventListener('click', (e) => {
@@ -1194,11 +1198,15 @@ document.querySelectorAll('.cmd-item').forEach(el => {
 });
 
 // ── Alert Panel ───────────────────────────────────────────────────────────
+let _alertsLoading = false;
 async function loadAlertsAdmin() {
+  if (_alertsLoading) return;
+  _alertsLoading = true;
   const customer = window._currentCustomer || '';
   const url = '/api/alerts' + (customer ? `?customer=${encodeURIComponent(customer)}` : '');
   try {
     const res = await fetch(url);
+    if (!res.ok) { _alertsLoading = false; return; }
     const data = await res.json();
     const alerts = data.alerts || [];
     const badge = document.getElementById('alert-btn-badge');
@@ -1238,7 +1246,8 @@ async function loadAlertsAdmin() {
           </div>
         </div>`;
     }).join('');
-  } catch(e) {}
+  } catch(e) { /* keep existing content on error */ }
+  finally { _alertsLoading = false; }
 }
 
 async function resolveAlertAdmin(id, btn) {
