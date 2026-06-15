@@ -3222,10 +3222,15 @@ def get_alerts():
 @app.route("/api/alerts/<int:alert_id>/resolve", methods=["POST"])
 @admin_required
 def resolve_alert(alert_id):
-    """Mark an alert as resolved."""
+    """Mark an alert as resolved and reset sg_alerts so next scan re-notifies if still dangerous."""
     conn = get_conn(); cur = conn.cursor()
     resolved_true = "true" if (USE_PG and DATABASE_URL) else "1"
+    cur.execute(f"SELECT customer FROM notifications WHERE id={_PH}", (alert_id,))
+    row = cur.fetchone()
     cur.execute(f"UPDATE notifications SET resolved={resolved_true} WHERE id={_PH}", (alert_id,))
+    if row:
+        ts = "NOW()" if (USE_PG and DATABASE_URL) else "datetime('now')"
+        cur.execute(f"UPDATE sg_alerts SET status='RESOLVED', updated_at={ts} WHERE customer={_PH} AND status='OPEN'", (row[0],))
     conn.commit(); conn.close()
     return jsonify({"ok": True})
 
@@ -3233,15 +3238,18 @@ def resolve_alert(alert_id):
 @app.route("/api/alerts/resolve-all", methods=["POST"])
 @admin_required
 def resolve_all_alerts():
-    """Mark all alerts for a customer as resolved."""
+    """Mark all alerts for a customer as resolved and reset sg_alerts."""
     body = request.get_json() or {}
     customer = body.get("customer", "")
     conn = get_conn(); cur = conn.cursor()
     resolved_true = "true" if (USE_PG and DATABASE_URL) else "1"
+    ts = "NOW()" if (USE_PG and DATABASE_URL) else "datetime('now')"
     if customer:
         cur.execute(f"UPDATE notifications SET resolved={resolved_true} WHERE customer={_PH} AND type IN ('warning','danger')", (customer,))
+        cur.execute(f"UPDATE sg_alerts SET status='RESOLVED', updated_at={ts} WHERE customer={_PH} AND status='OPEN'", (customer,))
     else:
         cur.execute(f"UPDATE notifications SET resolved={resolved_true} WHERE type IN ('warning','danger')")
+        cur.execute(f"UPDATE sg_alerts SET status='RESOLVED', updated_at={ts} WHERE status='OPEN'")
     conn.commit(); conn.close()
     return jsonify({"ok": True})
 
