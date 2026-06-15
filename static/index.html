@@ -897,6 +897,11 @@ function addTyping() {
 }
 function scrollChat() { const c = document.getElementById('chat'); c.scrollTop = c.scrollHeight; }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtTime(s) {
+  if (!s) return '';
+  const d = new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z');
+  return d.toLocaleString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit',second:'2-digit',day:'2-digit',month:'2-digit',year:'numeric'});
+}
 
 function md2html(text) {
   if (!text) return '';
@@ -1012,7 +1017,7 @@ function renderAuditLog() {
       <div class="audit-action">${actionLabel[l.action] || l.action}</div>
       <div class="audit-resource">${esc(l.resource)} <span style="font-size:10px;color:${l.status==='success'?'#1D7A4E':'#c62828'}">${l.status==='success'?'✅':'❌'}</span></div>
       ${l.message ? `<div class="audit-meta">${esc(l.message)}</div>` : ''}
-      <div class="audit-meta">${esc(l.created_at||'')} · by ${esc(l.performed_by||'admin')}</div>
+      <div class="audit-meta">${fmtTime(l.created_at)} · by ${esc(l.performed_by||'admin')}</div>
     </div>`).join('');
 }
 
@@ -1046,7 +1051,7 @@ async function loadNotifications() {
       <div class="notif-item ${n.read ? '' : 'unread'}">
         <div class="notif-title">${esc(n.title)}</div>
         <div class="notif-body">${md2html(n.body)}</div>
-        <div class="notif-time">${esc(n.created_at || '')}</div>
+        <div class="notif-time">${fmtTime(n.created_at)}</div>
       </div>`).join('');
   } catch(e) {}
 }
@@ -1220,7 +1225,7 @@ async function loadAlertsAdmin() {
             <div style="flex:1">
               <div style="font-size:12.5px;font-weight:500;color:#1a1a1a;margin-bottom:3px">${icon} ${a.title}</div>
               ${lines}
-              <div style="font-size:10px;color:#aaa;margin-top:5px">${a.customer} · ${a.created_at}</div>
+              <div style="font-size:10px;color:#aaa;margin-top:5px">${a.customer} · ${fmtTime(a.created_at)}</div>
             </div>
             <button class="btn-action" id="resolve-btn-${a.id}" onclick="resolveAlertAdmin(${a.id}, this)">Đã xử lý</button>
           </div>
