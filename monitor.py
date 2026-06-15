@@ -145,9 +145,17 @@ def run_cpu_ram_alerts():
                 if not h.get("monitor_enabled"):
                     continue
                 host_id = h.get("id")
-                name = h.get("server_name") or h.get("server_id", "?")
-                ms, md = vmonitor_api(token, "GET", f"/v1/infrastructure/hosts/{host_id}/metric")
-                print(f"[CPU] host={name} metric_status={ms} data={str(md)[:300]}")
+                server_id = h.get("server_id", "")
+                name = h.get("server_name") or server_id or "?"
+                for path in [
+                    f"/v1/infrastructure/vserver/hosts/{host_id}/metric",
+                    f"/v1/infrastructure/hosts/{server_id}/metric",
+                    f"/v1/infrastructure/vserver/hosts/{server_id}/metric",
+                ]:
+                    ms, md = vmonitor_api(token, "GET", path)
+                    print(f"[CPU] host={name} path={path.split('hosts/')[1]} status={ms} data={str(md)[:200]}")
+                    if ms == 200:
+                        break
                 if ms != 200:
                     continue
                 cpu = md.get("cpuUsage") or md.get("cpu_usage") or md.get("cpu")
