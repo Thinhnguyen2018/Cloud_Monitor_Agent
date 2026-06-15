@@ -118,6 +118,43 @@ def run_health_alerts():
         except Exception as e:
             print(f"[MONITOR] health error for {cust['name']}: {e}")
 
+def vmonitor_api(token, method, path, params=None):
+    import requests
+    base = "https://vmonitor.console.vngcloud.vn/vmonitor-api/api"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    r = requests.request(method, f"{base}{path}", headers=headers, params=params, verify=False, timeout=20)
+    try:
+        return r.status_code, r.json()
+    except Exception:
+        return r.status_code, {}
+
+def run_cpu_ram_alerts():
+    CPU_THRESHOLD = 80
+    customers = get_all_customers()
+    for cust in customers:
+        try:
+            token, info = fetch_token(cust["client_id"], cust["client_secret"])
+            # Query vMonitor infrastructure/vserver/hosts
+            page, size = 0, 50
+            st, data = vmonitor_api(token, "GET", "/v1/infrastructure/vserver/hosts",
+                                    params={"page": page, "size": size, "filter": ""})
+            if st != 200:
+                continue
+            hosts = data if isinstance(data, list) else data.get("data", data.get("listData", []))
+            for host in hosts:
+                name = host.get("hostname") or host.get("name") or host.get("hostName", "?")
+                cpu  = host.get("cpuUsage", -1)
+                mem  = host.get("memAvail", -1)
+                if cpu is not None and cpu >= CPU_THRESHOLD:
+                    db_write_notification(
+                        cust["name"],
+                        f"🔥 CPU cao: {name}",
+                        f"VM '{name}' đang dùng {cpu:.1f}% CPU (ngưỡng {CPU_THRESHOLD}%)",
+                        "danger"
+                    )
+        except Exception as e:
+            print(f"[MONITOR] cpu_ram error for {cust['name']}: {e}")
+
 SECGROUP_INTERVAL = 1 * 60  # 1 minute
 HEALTH_INTERVAL   = 30 * 60
 CPU_RAM_INTERVAL  = 5  * 60
@@ -132,6 +169,9 @@ def main():
         if now - last["health"] >= HEALTH_INTERVAL:
             run_health_alerts()
             last["health"] = now
+        if now - last["cpu_ram"] >= CPU_RAM_INTERVAL:
+            run_cpu_ram_alerts()
+            last["cpu_ram"] = now
         time.sleep(10)
 
 if __name__ == "__main__":
