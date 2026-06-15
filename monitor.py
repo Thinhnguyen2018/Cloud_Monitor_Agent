@@ -138,21 +138,24 @@ def run_cpu_ram_alerts():
             page, size = 0, 50
             st, data = vmonitor_api(token, "GET", "/v1/infrastructure/vserver/hosts",
                                     params={"page": page, "size": size, "filter": ""})
-            print(f"[CPU] vMonitor status={st} hosts={len(data.get('lstData', []))}")
             if st != 200:
                 continue
             hosts = data if isinstance(data, list) else data.get("lstData", data.get("data", data.get("listData", [])))
             for h in hosts:
-                print(f"[CPU] host={h.get('server_name')} enabled={h.get('monitor_enabled')} keys={list(h.keys())}")
-            for host in hosts:
-                name = host.get("hostname") or host.get("name") or host.get("hostName", "?")
-                cpu  = host.get("cpuUsage", -1)
-                mem  = host.get("memAvail", -1)
-                if cpu is not None and cpu >= CPU_THRESHOLD:
+                if not h.get("monitor_enabled"):
+                    continue
+                host_id = h.get("id")
+                name = h.get("server_name") or h.get("server_id", "?")
+                ms, md = vmonitor_api(token, "GET", f"/v1/infrastructure/hosts/{host_id}/metric")
+                print(f"[CPU] host={name} metric_status={ms} data={str(md)[:300]}")
+                if ms != 200:
+                    continue
+                cpu = md.get("cpuUsage") or md.get("cpu_usage") or md.get("cpu")
+                if cpu is not None and float(cpu) >= CPU_THRESHOLD:
                     db_write_notification(
                         cust["name"],
                         f"🔥 CPU cao: {name}",
-                        f"VM '{name}' đang dùng {cpu:.1f}% CPU (ngưỡng {CPU_THRESHOLD}%)",
+                        f"VM '{name}' đang dùng {float(cpu):.1f}% CPU (ngưỡng {CPU_THRESHOLD}%)",
                         "danger"
                     )
         except Exception as e:
