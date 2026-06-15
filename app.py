@@ -313,9 +313,10 @@ def db_write_notification(customer, title, body, ntype="info"):
         # Avoid duplicate alert: skip if same customer+title unresolved within 5 minutes
         time_expr = "NOW() - INTERVAL '5 minutes'" if (USE_PG and DATABASE_URL) else "datetime('now', '-5 minutes')"
         resolved_false = "false" if (USE_PG and DATABASE_URL) else "0"
+        read_false = "false" if (USE_PG and DATABASE_URL) else "0"
         cur.execute(f"""SELECT id FROM notifications
             WHERE customer={_PH} AND title={_PH} AND resolved={resolved_false}
-            AND created_at >= {time_expr}
+            AND read={read_false} AND created_at >= {time_expr}
             LIMIT 1""", (customer, title))
         if cur.fetchone():
             conn.close(); return
