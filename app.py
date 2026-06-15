@@ -834,7 +834,208 @@ def resources():
         return jsonify({"error": str(e)}), 500
 
 # ── Chat endpoint: real-time GN data + Claude ────────────────────────────────
-# ── Intent detection helpers ─────────────────────────────────────────────────
+# ── LLM-based intent detection ───────────────────────────────────────────────
+def detect_action_intent_llm(message, vms, sgs, volumes=[], wan_ips=[]):
+    """Use LLM to classify intent and extract entity names. Returns same signature as detect_action_intent."""
+    if not GN_MAAS_API_KEY:
+        return None, None, None
+    try:
+        vm_names  = [v.get("name","") for v in vms  if v.get("name")]
+        sg_names  = [s.get("name","") for s in sgs  if s.get("name")]
+        vol_names = [v.get("name") or v.get("volumeName","") for v in volumes if v.get("name") or v.get("volumeName")]
+        prompt = f"""Bạn là bộ phân loại ý định cho hệ thống quản lý cloud. Phân tích tin nhắn và trả về JSON.
+
+VMs có sẵn: {vm_names}
+Security Groups: {sg_names}
+Volumes: {vol_names}
+
+Tin nhắn: "{message}"
+
+Trả về JSON (không có gì khác):
+{{
+  "action_type": "<loại hành động hoặc none>",
+  "vm_name": "<tên VM hoặc null>",
+  "sg_name": "<tên SG hoặc null>",
+  "volume_name": "<tên volume hoặc null>",
+  "schedule_time": "<HH:MM hoặc null>",
+  "schedule_date": "<DD/MM/YYYY hoặc null>",
+  "new_name": "<tên mới nếu đổi tên hoặc null>",
+  "ip_address": "<IP address hoặc null>"
+}}
+
+Các action_type hợp lệ:
+- vm_stop: tắt/dừng VM ngay
+- vm_start: bật/khởi động VM ngay
+- vm_reboot: khởi động lại VM ngay
+- schedule_vm_stop: hẹn lịch tắt VM (phải có schedule_time)
+- schedule_vm_start: hẹn lịch bật VM (phải có schedule_time)
+- list_schedule: xem danh sách lịch hẹn đã đặt
+- cancel_schedule: hủy lịch hẹn
+- vm_create_guide: tạo VM mới
+- volume_attach: gắn volume vào VM
+- volume_detach: gỡ volume khỏi VM
+- volume_create: tạo volume mới
+- volume_delete: xóa volume
+- volume_resize: thay đổi dung lượng volume
+- fip_associate: gắn IP công cộng vào VM
+- fip_disassociate: gỡ IP công cộng khỏi VM
+- sg_attach: gắn security group vào VM
+- sg_detach: gỡ security group khỏi VM
+- sg_rule_add: thêm rule vào security group
+- sg_rule_remove: xóa rule khỏi security group
+- vm_rename: đổi tên VM
+- volume_rename: đổi tên volume
+- vm_snapshot: tạo snapshot VM
+- vm_resize: thay đổi cấu hình VM
+- vm_delete: xóa VM
+- sshkey_create: tạo SSH key
+- sshkey_delete: xóa SSH key
+- none: không phải hành động (câu hỏi, liệt kê, trạng thái...)"""
+
+        r = requests.post(
+            GN_MAAS_URL,
+            headers={"Authorization": f"Bearer {GN_MAAS_API_KEY}", "Content-Type": "application/json"},
+            json={"model": GN_MAAS_MODEL, "messages": [{"role": "user", "content": prompt}],
+                  "max_tokens": 300, "temperature": 0.1},
+            timeout=10, verify=False,
+        )
+        raw = r.json()["choices"][0]["message"]["content"].strip()
+        # Extract JSON from response
+        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not m:
+            return None, None, None
+        data = json.loads(m.group())
+        action_type = data.get("action_type", "none")
+        if action_type == "none":
+            return None, None, None
+
+        # Resolve entities
+        from datetime import datetime as dt
+        def _find_vm(name):
+            if not name: return None
+            nl = name.lower()
+            for v in vms:
+                if (v.get("name","")).lower() == nl: return v
+            for v in vms:
+                if nl in (v.get("name","")).lower(): return v
+            return None
+        def _find_sg(name):
+            if not name: return None
+            nl = name.lower()
+            for s in sgs:
+                if (s.get("name","")).lower() == nl: return s
+            return None
+        def _find_vol(name):
+            if not name: return None
+            nl = name.lower()
+            for v in volumes:
+                vn = (v.get("name") or v.get("volumeName","")).lower()
+                if vn == nl: return v
+            return None
+
+        vm  = _find_vm(data.get("vm_name"))
+        sg  = _find_sg(data.get("sg_name"))
+        vol = _find_vol(data.get("volume_name"))
+
+        stime = data.get("schedule_time")  # "HH:MM"
+        sdate = data.get("schedule_date")  # "DD/MM/YYYY"
+
+        # Build params per action_type
+        if action_type in ("vm_stop", "vm_start", "vm_reboot"):
+            if not vm:
+                return (action_type, None, f"Không tìm thấy VM '{data.get('vm_name')}'. Kiểm tra tên VM lại.")
+            labels = {"vm_stop": "Dừng", "vm_start": "Khởi động", "vm_reboot": "Khởi động lại"}
+            return (action_type,
+                    {"serverId": vm.get("uuid"), "serverName": vm.get("name")},
+                    f"{labels[action_type]} VM **{vm.get('name')}**")
+
+        if action_type in ("schedule_vm_stop", "schedule_vm_start"):
+            sched_action = "vm_stop" if action_type == "schedule_vm_stop" else "vm_start"
+            if not vm:
+                return (action_type, None, f"Không tìm thấy VM '{data.get('vm_name')}'.")
+            if not stime:
+                return (action_type, None, "Bạn muốn hẹn lúc mấy giờ?")
+            try:
+                hh, mm = map(int, stime.split(":"))
+                now_dt = dt.now()
+                if sdate:
+                    dd, mo = map(int, sdate.split("/")[:2])
+                    yy = int(sdate.split("/")[2]) if len(sdate.split("/")) > 2 else now_dt.year
+                else:
+                    dd, mo, yy = now_dt.day, now_dt.month, now_dt.year
+                run_time = dt(yy, mo, dd, hh, mm)
+                label = "tắt" if sched_action == "vm_stop" else "bật"
+                return (
+                    f"schedule_{sched_action}",
+                    {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
+                     "runAt": run_time.isoformat(), "schedAction": sched_action},
+                    f"Hẹn lịch **{label}** VM **{vm.get('name')}** lúc **{hh:02d}:{mm:02d} ngày {dd:02d}/{mo:02d}/{yy}**"
+                )
+            except Exception:
+                return (action_type, None, "Không parse được thời gian, vui lòng thử lại (VD: 11:35).")
+
+        if action_type == "list_schedule":
+            return ("list_schedule", {}, "Danh sách lịch hẹn hiện tại")
+        if action_type == "cancel_schedule":
+            return ("cancel_schedule", {}, "Hủy lịch hẹn")
+        if action_type == "vm_create_guide":
+            return ("vm_create_guide", {"vmName": data.get("vm_name") or ""}, "Hướng dẫn tạo VM mới")
+
+        if action_type in ("volume_attach", "volume_detach"):
+            if vm and vol:
+                vol_id = vol.get("uuid") or vol.get("id") or vol.get("volumeId","")
+                srv_id = vm.get("uuid","")
+                if srv_id and not srv_id.startswith("ins-"): srv_id = "ins-" + srv_id
+                if vol_id and not str(vol_id).startswith("vol-"): vol_id = "vol-" + str(vol_id)
+                label = "Gắn" if action_type == "volume_attach" else "Gỡ"
+                prep  = "vào" if action_type == "volume_attach" else "khỏi"
+                return (action_type,
+                        {"serverId": srv_id, "serverName": vm.get("name"),
+                         "volumeId": vol_id, "volumeName": vol.get("name") or vol.get("volumeName")},
+                        f"{label} volume **{vol.get('name')}** {prep} VM **{vm.get('name')}**")
+            return (action_type, None, f"Không tìm thấy VM hoặc Volume.")
+
+        if action_type in ("sg_attach", "sg_detach"):
+            if vm and sg:
+                label = "Gắn" if action_type == "sg_attach" else "Gỡ"
+                prep  = "vào" if action_type == "sg_attach" else "khỏi"
+                return (action_type,
+                        {"serverId": vm.get("uuid"), "serverName": vm.get("name"),
+                         "sgId": sg.get("uuid") or sg.get("id"), "sgName": sg.get("name")},
+                        f"{label} SG **{sg.get('name')}** {prep} VM **{vm.get('name')}**")
+            return (action_type, None, "Không tìm thấy VM hoặc Security Group.")
+
+        if action_type in ("vm_rename", "volume_rename"):
+            new_name = data.get("new_name")
+            if action_type == "vm_rename" and vm and new_name:
+                return (action_type, {"serverId": vm.get("uuid"), "serverName": vm.get("name"), "newName": new_name},
+                        f"Đổi tên VM **{vm.get('name')}** → **{new_name}**")
+            if action_type == "volume_rename" and vol and new_name:
+                return (action_type, {"volumeId": vol.get("uuid") or vol.get("id"), "volumeName": vol.get("name"), "newName": new_name},
+                        f"Đổi tên volume **{vol.get('name')}** → **{new_name}**")
+            return (action_type, None, "Cần biết tên hiện tại và tên mới.")
+
+        if action_type == "vm_snapshot" and vm:
+            return (action_type, {"serverId": vm.get("uuid"), "serverName": vm.get("name")},
+                    f"Tạo snapshot VM **{vm.get('name')}**")
+        if action_type == "vm_delete" and vm:
+            return (action_type, {"serverId": vm.get("uuid"), "serverName": vm.get("name")},
+                    f"Xóa VM **{vm.get('name')}**")
+        if action_type == "volume_delete" and vol:
+            vol_id = vol.get("uuid") or vol.get("id","")
+            if vol_id and not str(vol_id).startswith("vol-"): vol_id = "vol-" + str(vol_id)
+            return (action_type, {"volumeId": vol_id, "volumeName": vol.get("name") or vol.get("volumeName")},
+                    f"Xóa volume **{vol.get('name')}**")
+
+        # For other complex actions fall back to keyword
+        return None, None, None
+
+    except Exception as e:
+        print(f"[LLM_INTENT] error: {e}")
+        return None, None, None
+
+
+# ── Keyword-based intent detection (fallback) ─────────────────────────────────
 def detect_action_intent(message, vms, sgs, volumes=[], wan_ips=[]):
     """
     Detect if user wants to execute an action.
@@ -1925,9 +2126,11 @@ DỮ LIỆU REAL-TIME được cập nhật mỗi lần user gửi tin nhắn.""
                 reply = f"❌ Thất bại: {data}"
             return jsonify({"reply": reply, "fetchedAt": now, "actionDone": True})
 
-    # Detect new action intent from this message
+    # Detect new action intent from this message — LLM first, fallback to keyword
     if not confirmed:
-        action_type, params, desc = detect_action_intent(user_message, vms, sgs, volumes, wan_ips)
+        action_type, params, desc = detect_action_intent_llm(user_message, vms, sgs, volumes, wan_ips)
+        if action_type is None:
+            action_type, params, desc = detect_action_intent(user_message, vms, sgs, volumes, wan_ips)
         if action_type and params is not None:
             # Handle schedule intent — execute directly, no confirm needed
             if action_type.startswith("schedule_"):
