@@ -337,7 +337,8 @@ def db_get_notifications(customer, unread_only=False):
 
 def db_mark_notifications_read(customer):
     conn = get_conn(); cur = conn.cursor()
-    cur.execute(f"UPDATE notifications SET read=1 WHERE customer={_PH}", (customer,))
+    read_true = "true" if (USE_PG and DATABASE_URL) else "1"
+    cur.execute(f"UPDATE notifications SET read={read_true} WHERE customer={_PH}", (customer,))
     conn.commit(); conn.close()
 
 try:
