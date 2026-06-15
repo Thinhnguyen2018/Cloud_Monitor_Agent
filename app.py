@@ -193,6 +193,24 @@ def init_db():
                 expires_at  TIMESTAMP NOT NULL
             )
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS sg_alerts (
+                id              SERIAL PRIMARY KEY,
+                customer        TEXT NOT NULL,
+                sg_id           TEXT NOT NULL,
+                sg_name         TEXT,
+                policy_id       TEXT NOT NULL,
+                policy_name     TEXT,
+                severity        TEXT,
+                risk_score      INTEGER DEFAULT 0,
+                status          TEXT DEFAULT 'OPEN',
+                message         TEXT,
+                recommendation  TEXT,
+                rule_detail     TEXT,
+                created_at      TIMESTAMP DEFAULT NOW(),
+                updated_at      TIMESTAMP DEFAULT NOW()
+            )
+        """)
     else:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS customers (
@@ -252,6 +270,24 @@ def init_db():
                 token       TEXT NOT NULL,
                 user_info   TEXT NOT NULL DEFAULT '{}',
                 expires_at  TEXT NOT NULL
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS sg_alerts (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer        TEXT NOT NULL,
+                sg_id           TEXT NOT NULL,
+                sg_name         TEXT,
+                policy_id       TEXT NOT NULL,
+                policy_name     TEXT,
+                severity        TEXT,
+                risk_score      INTEGER DEFAULT 0,
+                status          TEXT DEFAULT 'OPEN',
+                message         TEXT,
+                recommendation  TEXT,
+                rule_detail     TEXT,
+                created_at      TEXT DEFAULT (datetime('now','localtime')),
+                updated_at      TEXT DEFAULT (datetime('now','localtime'))
             )
         """)
     conn.commit()
@@ -1045,7 +1081,7 @@ Các action_type hợp lệ:
 
 
 # ── Keyword-based intent detection (fallback) ─────────────────────────────────
-def detect_action_intent(message, vms, sgs, volumes=[], wan_ips=[]):
+def detect_action_intent(message, vms, sgs, volumes=[], wan_ips=[], sshkeys=[]):
     """
     Detect if user wants to execute an action.
     Returns (action_type, params, description) or (None, None, None).
@@ -3827,13 +3863,20 @@ def dashboard_stats():
     conn = get_conn(); cur = conn.cursor()
 
     # ── Audit stats: last 7 days by day ──────────────────────────────────────
-    cur.execute("""
-        SELECT date(created_at) as day, status, COUNT(*) as cnt
-        FROM audit_log
-        WHERE created_at >= date('now', '-6 days')
-        GROUP BY day, status
-        ORDER BY day
-    """)
+    if USE_PG and DATABASE_URL:
+        cur.execute("""
+            SELECT created_at::date as day, status, COUNT(*) as cnt
+            FROM audit_log
+            WHERE created_at >= NOW() - INTERVAL '6 days'
+            GROUP BY day, status ORDER BY day
+        """)
+    else:
+        cur.execute("""
+            SELECT date(created_at) as day, status, COUNT(*) as cnt
+            FROM audit_log
+            WHERE created_at >= date('now', '-6 days')
+            GROUP BY day, status ORDER BY day
+        """)
     audit_rows = cur.fetchall()
 
     days_map = {}
@@ -3872,7 +3915,10 @@ def dashboard_stats():
     cur.execute("SELECT COUNT(*) FROM audit_log WHERE status='failed'")
     total_failed = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM audit_log WHERE date(created_at)=date('now')")
+    if USE_PG and DATABASE_URL:
+        cur.execute("SELECT COUNT(*) FROM audit_log WHERE created_at::date = CURRENT_DATE")
+    else:
+        cur.execute("SELECT COUNT(*) FROM audit_log WHERE date(created_at)=date('now')")
     today_actions = cur.fetchone()[0]
 
     # ── Schedules overview ────────────────────────────────────────────────────
