@@ -48,22 +48,26 @@ def fetch_token(client_id, client_secret):
     PROXY_TOKEN_URL = _os.environ.get("PROXY_TOKEN_URL", "")
     ADMIN_PASSWORD  = _os.environ.get("ADMIN_PASSWORD", "admin12345")
     if PROXY_TOKEN_URL:
-        # Call app proxy: expects JSON body + X-Proxy-Secret header
-        r = requests.post(PROXY_TOKEN_URL,
-                          headers={"Content-Type": "application/json",
-                                   "X-Proxy-Secret": ADMIN_PASSWORD},
-                          json={"client_id": client_id, "client_secret": client_secret},
-                          timeout=15)
-        d = r.json()
-        return d.get("token", ""), d.get("user_info", {})
-    else:
-        creds = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
-        r = requests.post("https://iam.api.vngcloud.vn/accounts-api/v2/auth/token",
-                          data={"grant_type": "client_credentials"},
-                          headers={"Authorization": f"Basic {creds}",
-                                   "Content-Type": "application/x-www-form-urlencoded"}, timeout=15)
-        d = r.json()
-        return d.get("access_token", ""), d
+        try:
+            r = requests.post(PROXY_TOKEN_URL,
+                              headers={"Content-Type": "application/json",
+                                       "X-Proxy-Secret": ADMIN_PASSWORD},
+                              json={"client_id": client_id, "client_secret": client_secret},
+                              timeout=10)
+            d = r.json()
+            token = d.get("token", "")
+            if token:
+                return token, d.get("user_info", {})
+        except Exception as e:
+            print(f"[MONITOR] Proxy token failed, falling back to IAM: {e}")
+    # Fallback: call IAM directly
+    creds = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    r = requests.post("https://iam.api.vngcloud.vn/accounts-api/v2/auth/token",
+                      data={"grant_type": "client_credentials"},
+                      headers={"Authorization": f"Basic {creds}",
+                               "Content-Type": "application/x-www-form-urlencoded"}, timeout=15)
+    d = r.json()
+    return d.get("access_token", ""), d
 
 def gn_api(token, uid, method, path, body=None):
     import requests
