@@ -111,19 +111,17 @@ class VNGCloudConnector:
     def get_sg_rules(self, sg_id: str) -> List[dict]:
         # Try dedicated rules endpoint first, fall back to detail endpoint
         for path in [
-            f"v2/{self._pid}/secgroups/{sg_id}/secgroupRules",
-            f"v1/{self._pid}/secgroupRules?secgroupId={sg_id}",
+            f"v2/{self._pid}/secgroups/{sg_id}/secGroupRules",
             f"v2/{self._pid}/secgroups/{sg_id}",
         ]:
             status, data = self._get(path)
             if status != 200:
                 continue
+            d = data if isinstance(data, dict) else {}
             rules = (
-                data.get("secgroupRuleEntities")
-                or data.get("rules")
-                or data.get("listData")
-                or data.get("data", {}).get("secgroupRuleEntities")
-                or []
+                data if isinstance(data, list) else
+                d.get("data") if isinstance(d.get("data"), list) else
+                d.get("secgroupRuleEntities") or d.get("rules") or d.get("listData") or []
             )
             if isinstance(rules, list) and rules:
                 return rules
@@ -168,7 +166,8 @@ class InventoryCollector:
     @staticmethod
     def _normalize(r: dict) -> SGRule:
         direction = (r.get("direction") or "ingress").lower()
-        protocol  = (r.get("protocol") or "all").lower() or "all"
+        proto_raw = r.get("protocol") or "any"
+        protocol  = "all" if proto_raw in ("any", "", None) else proto_raw.lower()
         port_min  = r.get("portRangeMin") if r.get("portRangeMin") is not None else r.get("port_range_min")
         port_max  = r.get("portRangeMax") if r.get("portRangeMax") is not None else r.get("port_range_max")
         cidr      = r.get("remoteIpPrefix") or r.get("remote_ip_prefix") or "0.0.0.0/0"
@@ -437,7 +436,141 @@ class NotificationService:
         self._db(customer, title, body, "info")
 
 
+# ── Network Reachability Scanner ──────────────────────────────────────────────
+
+@dataclass
+class NetworkViolation:
+    vm_id: str
+    vm_name: str
+    public_ip: str
+    sg_id: str
+    sg_name: str
+    port: int
+    protocol: str
+    policy_id: str
+    policy_name: str
+    severity: str
+    risk_score: int
+    message: str
+    recommendation: str
+
+
+class NetworkScanner:
+    """
+    Detects open dangerous ports on VMs with public floating IPs.
+    Bypasses the need to read SG rules from API (which returns 403).
+    Proves that a port IS actually reachable from the internet.
+    """
+
+    PROBE_TIMEOUT = 3  # seconds per port
+
+    def __init__(self, connector: "VNGCloudConnector", policies_file: str = DEFAULT_POLICIES_FILE):
+        self._connector = connector
+        with open(policies_file) as f:
+            cfg = json.load(f)
+        self._scores = cfg.get("risk_scores", {"CRITICAL": 100, "HIGH": 70, "MEDIUM": 40, "LOW": 10})
+        # Build port → policy map from policies that have port conditions
+        self._port_policies: dict = {}
+        for p in cfg["policies"]:
+            for port in p["conditions"].get("port", []):
+                if port not in self._port_policies or \
+                   self._scores.get(p["severity"], 0) > self._scores.get(self._port_policies[port]["severity"], 0):
+                    self._port_policies[port] = p
+        # All unique ports to probe
+        self._ports_to_probe = sorted(self._port_policies.keys())
+
+    def _list_vms(self) -> List[dict]:
+        status, data = self._connector._get(f"v2/{self._connector._pid}/servers")
+        if status != 200:
+            return []
+        items = data.get("listData") or data.get("data") or data
+        return items if isinstance(items, list) else []
+
+    def _probe_port(self, ip: str, port: int) -> bool:
+        import socket
+        try:
+            with socket.create_connection((ip, port), timeout=self.PROBE_TIMEOUT):
+                return True
+        except (socket.timeout, ConnectionRefusedError, OSError):
+            return False
+
+    def scan(self) -> List[NetworkViolation]:
+        violations = []
+        vms = self._list_vms()
+
+        for vm in vms:
+            vm_id   = vm.get("uuid") or vm.get("id", "")
+            vm_name = vm.get("name", "?")
+            sg_list = vm.get("secGroups") or vm.get("security_groups") or []
+
+            # Collect all floating IPs from internal interfaces
+            public_ips = []
+            for iface in vm.get("internalInterfaces", []):
+                fip = iface.get("floatingIp") or iface.get("floating_ip")
+                if fip:
+                    public_ips.append(fip)
+            for iface in vm.get("externalInterfaces", []):
+                fip = iface.get("floatingIp") or iface.get("ip") or iface.get("fixedIp")
+                if fip:
+                    public_ips.append(fip)
+
+            if not public_ips:
+                continue  # No public IP — skip
+
+            sg_id   = sg_list[0].get("uuid", "") if sg_list else vm_id
+            sg_name = sg_list[0].get("name", "N/A") if sg_list else "N/A"
+
+            for ip in public_ips:
+                for port in self._ports_to_probe:
+                    if self._probe_port(ip, port):
+                        policy = self._port_policies[port]
+                        severity = policy["severity"]
+                        violations.append(NetworkViolation(
+                            vm_id=vm_id,
+                            vm_name=vm_name,
+                            public_ip=ip,
+                            sg_id=sg_id,
+                            sg_name=sg_name,
+                            port=port,
+                            protocol="tcp",
+                            policy_id=policy["id"],
+                            policy_name=policy["name"],
+                            severity=severity,
+                            risk_score=self._scores.get(severity, 0),
+                            message=f"{policy['message']} — VM: {vm_name} ({ip}:{port})",
+                            recommendation=policy["recommendation"],
+                        ))
+                        print(f"[NET_SCAN] OPEN port {port} on {vm_name} ({ip})")
+
+        return violations
+
+
 # ── Pipeline entry point ───────────────────────────────────────────────────────
+
+def _get_token(customer: dict) -> Tuple[str, dict]:
+    import requests, base64
+    proxy_url      = os.environ.get("PROXY_TOKEN_URL", "")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "admin12345")
+    if proxy_url:
+        r = requests.post(
+            proxy_url,
+            headers={"Content-Type": "application/json", "X-Proxy-Secret": admin_password},
+            json={"client_id": customer["client_id"], "client_secret": customer["client_secret"]},
+            timeout=15,
+        )
+        d = r.json()
+        return d.get("token", ""), d.get("user_info", {})
+    else:
+        creds = base64.b64encode(f"{customer['client_id']}:{customer['client_secret']}".encode()).decode()
+        r = requests.post(
+            "https://iam.api.vngcloud.vn/accounts-api/v2/auth/token",
+            data={"grant_type": "client_credentials"},
+            headers={"Authorization": f"Basic {creds}", "Content-Type": "application/x-www-form-urlencoded"},
+            timeout=15,
+        )
+        d = r.json()
+        return d.get("access_token", ""), d
+
 
 def run_sg_risk_detection(customer: dict, get_conn_fn, db_write_fn,
                           database_url: str = "",
@@ -446,67 +579,51 @@ def run_sg_risk_detection(customer: dict, get_conn_fn, db_write_fn,
     Full Security Group Risk Detection pipeline for one customer.
 
     Steps:
-      1. Authenticate (proxy or direct IAM)
-      2. CloudConnector → fetch raw SG data
-      3. InventoryCollector → normalize to SecurityGroup objects
-      4. PolicyEngine → evaluate rules, produce violations
-      5. RiskScoringEngine → calculate scores and summary
-      6. AlertGenerator → upsert new alerts, resolve stale ones (dedup)
-      7. NotificationService → write to DB (and future channels)
+      1. Authenticate
+      2. CloudConnector → SG inventory → PolicyEngine (rule-based, may return 0 if API restricted)
+      3. NetworkScanner → probe dangerous ports on public IPs (works regardless of API permissions)
+      4. RiskScoringEngine → scores and summary
+      5. AlertGenerator → upsert/resolve alerts with deduplication
+      6. NotificationService → write to DB
     """
-    import requests
-
-    # Step 1: Authenticate
-    proxy_url      = os.environ.get("PROXY_TOKEN_URL", "")
-    admin_password = os.environ.get("ADMIN_PASSWORD", "admin12345")
-
-    if proxy_url:
-        r = requests.post(
-            proxy_url,
-            headers={"Content-Type": "application/json", "X-Proxy-Secret": admin_password},
-            json={"client_id": customer["client_id"], "client_secret": customer["client_secret"]},
-            timeout=15,
-        )
-        d     = r.json()
-        token = d.get("token", "")
-        info  = d.get("user_info", {})
-    else:
-        import base64
-        creds = base64.b64encode(f"{customer['client_id']}:{customer['client_secret']}".encode()).decode()
-        r = requests.post(
-            "https://iam.api.vngcloud.vn/accounts-api/v2/auth/token",
-            data={"grant_type": "client_credentials"},
-            headers={"Authorization": f"Basic {creds}", "Content-Type": "application/x-www-form-urlencoded"},
-            timeout=15,
-        )
-        d     = r.json()
-        token = d.get("access_token", "")
-        info  = d
-
+    token, info = _get_token(customer)
     uid = str(info.get("accountId") or info.get("userId", "0"))
 
-    # Steps 2–3: Collect inventory
     connector = VNGCloudConnector(token, uid, customer["project_id"])
-    collector = InventoryCollector(connector, customer["name"])
-    sgs       = collector.collect()
 
-    # Step 4: Evaluate policies
-    engine     = PolicyEngine(policies_file)
-    violations = engine.evaluate(sgs)
+    # Step 2a: Rule-based detection (via SG API)
+    collector  = InventoryCollector(connector, customer["name"])
+    sgs        = collector.collect()
+    policy_eng = PolicyEngine(policies_file)
+    sg_violations = policy_eng.evaluate(sgs)
 
-    # Step 5: Risk scoring
+    # Step 2b: Network-based detection (port probing)
+    net_scanner      = NetworkScanner(connector, policies_file)
+    net_violations   = net_scanner.scan()
+
+    # Step 4: Risk scoring across both sources
     scorer  = RiskScoringEngine()
-    summary = scorer.summary(violations)
+    all_sg_count = len(sg_violations)
+    all_net_count = len(net_violations)
+    combined_summary = {
+        "total": all_sg_count + all_net_count,
+        "by_severity": {
+            sev: (scorer.summary(sg_violations)["by_severity"].get(sev, 0) +
+                  sum(1 for v in net_violations if v.severity == sev))
+            for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW")
+        }
+    }
 
-    # Steps 6–7: Alert persistence + notifications
+    # Steps 5–6: Alert persistence + notifications
     alert_gen = AlertGenerator(get_conn_fn, database_url)
     alert_gen.ensure_table()
-    notifier = NotificationService(db_write_fn)
+    notifier  = NotificationService(db_write_fn)
 
     active_keys = set()
     new_count   = 0
 
-    for v in violations:
+    # Process SG policy violations
+    for v in sg_violations:
         alert = SGAlert(
             customer=customer["name"],
             sg_id=v.sg.sg_id,
@@ -525,15 +642,45 @@ def run_sg_risk_detection(customer: dict, get_conn_fn, db_write_fn,
             notifier.notify_violation(customer["name"], v)
             new_count += 1
 
+    # Process network scan violations
+    for nv in net_violations:
+        # Use vm_id + "NET-" + policy_id as dedup key via sg_id field
+        net_sg_id = f"net-{nv.vm_id}"
+        net_policy_id = f"NET-{nv.policy_id}-{nv.port}"
+        alert = SGAlert(
+            customer=customer["name"],
+            sg_id=net_sg_id,
+            sg_name=f"{nv.sg_name} → {nv.vm_name}",
+            policy_id=net_policy_id,
+            policy_name=nv.policy_name,
+            severity=nv.severity,
+            risk_score=nv.risk_score,
+            message=nv.message,
+            recommendation=nv.recommendation,
+            rule_detail=f"NETWORK PROBE: {nv.public_ip}:{nv.port}/tcp OPEN",
+        )
+        is_new, _ = alert_gen.upsert(alert)
+        active_keys.add((net_sg_id, net_policy_id))
+        if is_new:
+            title = f"🔴 [{nv.policy_id}] {nv.policy_name} — {nv.vm_name}"
+            body  = (
+                f"Severity: {nv.severity}  |  Risk Score: {nv.risk_score}/100\n"
+                f"{nv.message}\n"
+                f"Port {nv.port}/tcp mở từ internet (xác nhận bằng network probe)\n"
+                f"Recommendation: {nv.recommendation}"
+            )
+            ntype = "danger" if nv.severity in ("CRITICAL", "HIGH") else "warning"
+            db_write_fn(customer["name"], title, body, ntype)
+            new_count += 1
+
     resolved = alert_gen.resolve_stale(customer["name"], active_keys)
     notifier.notify_resolved(customer["name"], resolved)
-    notifier.notify_scan_summary(customer["name"], new_count, summary)
+    notifier.notify_scan_summary(customer["name"], new_count, combined_summary)
 
     print(
         f"[SG_RISK] {customer['name']}: "
-        f"{len(sgs)} SGs scanned, "
-        f"{len(violations)} violations, "
-        f"{new_count} new alerts, "
-        f"{len(resolved)} resolved"
+        f"{len(sgs)} SGs, {all_sg_count} rule-violations, "
+        f"{all_net_count} network-violations, "
+        f"{new_count} new alerts, {len(resolved)} resolved"
     )
-    return violations
+    return sg_violations + [None] * len(net_violations)  # unified return
