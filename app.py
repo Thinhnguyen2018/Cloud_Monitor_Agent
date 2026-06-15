@@ -340,7 +340,7 @@ def db_get_notifications(customer, unread_only=False):
 def db_mark_notifications_read(customer):
     conn = get_conn(); cur = conn.cursor()
     read_true = "true" if (USE_PG and DATABASE_URL) else "1"
-    cur.execute(f"UPDATE notifications SET read={read_true} WHERE customer={_PH} AND type NOT IN ('warning','danger')", (customer,))
+    cur.execute(f"UPDATE notifications SET read={read_true} WHERE customer={_PH}", (customer,))
     conn.commit(); conn.close()
 
 try:
@@ -3187,8 +3187,7 @@ def get_notifications():
     if not customer:
         return jsonify({"notifications": [], "unread": 0})
     notifs = db_get_notifications(customer, unread_only)
-    all_notifs = db_get_notifications(customer)
-    unread = sum(1 for n in all_notifs if not n.get("read") or (n.get("type") in ("warning","danger") and not n.get("resolved")))
+    unread = sum(1 for n in db_get_notifications(customer) if not n.get("read"))
     return jsonify({"notifications": notifs, "unread": unread})
 
 @app.route("/api/notifications/read", methods=["POST"])
