@@ -262,10 +262,19 @@ _PH = "%s" if (USE_PG and DATABASE_URL) else "?"
 
 def db_write_schedule(job_id, customer, project_id, action, params, creds, run_time, description):
     conn = get_conn(); cur = conn.cursor()
-    cur.execute(f"""INSERT OR REPLACE INTO scheduled_jobs
-        (job_id,customer,project_id,action,params,creds,run_time,description,status)
-        VALUES ({_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},'pending')""",
-        (job_id, customer, project_id, action, json.dumps(params), json.dumps(creds), run_time, description))
+    if USE_PG and DATABASE_URL:
+        cur.execute(f"""INSERT INTO scheduled_jobs
+            (job_id,customer,project_id,action,params,creds,run_time,description,status)
+            VALUES ({_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},'pending')
+            ON CONFLICT (job_id) DO UPDATE SET
+                action=EXCLUDED.action, params=EXCLUDED.params, creds=EXCLUDED.creds,
+                run_time=EXCLUDED.run_time, description=EXCLUDED.description, status='pending'""",
+            (job_id, customer, project_id, action, json.dumps(params), json.dumps(creds), run_time, description))
+    else:
+        cur.execute(f"""INSERT OR REPLACE INTO scheduled_jobs
+            (job_id,customer,project_id,action,params,creds,run_time,description,status)
+            VALUES ({_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},'pending')""",
+            (job_id, customer, project_id, action, json.dumps(params), json.dumps(creds), run_time, description))
     conn.commit(); conn.close()
 
 def db_update_schedule_status(job_id, status, result=""):
@@ -864,10 +873,10 @@ Trả về JSON (không có gì khác):
 }}
 
 Các action_type hợp lệ:
-- vm_stop: tắt/dừng VM ngay
+- vm_stop: tắt/dừng/tắm VM ngay (lưu ý: "tắm" trong ngữ cảnh VM thường là typo của "tắt")
 - vm_start: bật/khởi động VM ngay
 - vm_reboot: khởi động lại VM ngay
-- schedule_vm_stop: hẹn lịch tắt VM (phải có schedule_time)
+- schedule_vm_stop: hẹn lịch tắt/tắm VM (phải có schedule_time)
 - schedule_vm_start: hẹn lịch bật VM (phải có schedule_time)
 - list_schedule: xem danh sách lịch hẹn đã đặt
 - cancel_schedule: hủy lịch hẹn
