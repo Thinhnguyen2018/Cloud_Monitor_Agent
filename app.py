@@ -3224,7 +3224,8 @@ def get_alerts():
 def resolve_alert(alert_id):
     """Mark an alert as resolved."""
     conn = get_conn(); cur = conn.cursor()
-    cur.execute(f"UPDATE notifications SET resolved=1 WHERE id={_PH}", (alert_id,))
+    resolved_true = "true" if (USE_PG and DATABASE_URL) else "1"
+    cur.execute(f"UPDATE notifications SET resolved={resolved_true} WHERE id={_PH}", (alert_id,))
     conn.commit(); conn.close()
     return jsonify({"ok": True})
 
@@ -3236,10 +3237,11 @@ def resolve_all_alerts():
     body = request.get_json() or {}
     customer = body.get("customer", "")
     conn = get_conn(); cur = conn.cursor()
+    resolved_true = "true" if (USE_PG and DATABASE_URL) else "1"
     if customer:
-        cur.execute(f"UPDATE notifications SET resolved=1 WHERE customer={_PH} AND type IN ('warning','danger')", (customer,))
+        cur.execute(f"UPDATE notifications SET resolved={resolved_true} WHERE customer={_PH} AND type IN ('warning','danger')", (customer,))
     else:
-        cur.execute("UPDATE notifications SET resolved=1 WHERE type IN ('warning','danger')")
+        cur.execute(f"UPDATE notifications SET resolved={resolved_true} WHERE type IN ('warning','danger')")
     conn.commit(); conn.close()
     return jsonify({"ok": True})
 

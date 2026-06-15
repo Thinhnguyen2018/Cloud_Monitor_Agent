@@ -689,8 +689,11 @@ def run_sg_risk_detection(customer: dict, get_conn_fn, db_write_fn,
         ntype = "danger" if worst in ("CRITICAL", "HIGH") else "warning"
         db_write_fn(customer["name"], title, body, ntype)
 
-    resolved = alert_gen.resolve_stale(customer["name"], active_keys)
-    notifier.notify_resolved(customer["name"], resolved)
+    # Only resolve stale alerts if we actually got data — avoid false-resolves on API failures
+    resolved = []
+    if sgs:
+        resolved = alert_gen.resolve_stale(customer["name"], active_keys)
+        notifier.notify_resolved(customer["name"], resolved)
 
     print(
         f"[SG_RISK] {customer['name']}: "
