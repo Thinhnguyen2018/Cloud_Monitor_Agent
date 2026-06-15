@@ -138,10 +138,12 @@ def run_cpu_ram_alerts():
             page, size = 0, 50
             st, data = vmonitor_api(token, "GET", "/v1/infrastructure/vserver/hosts",
                                     params={"page": page, "size": size, "filter": ""})
-            print(f"[CPU] vMonitor status={st} data={str(data)[:300]}")
+            print(f"[CPU] vMonitor status={st} hosts={len(data.get('lstData', []))}")
             if st != 200:
                 continue
-            hosts = data if isinstance(data, list) else data.get("data", data.get("listData", []))
+            hosts = data if isinstance(data, list) else data.get("lstData", data.get("data", data.get("listData", [])))
+            for h in hosts:
+                print(f"[CPU] host={h.get('server_name')} enabled={h.get('monitor_enabled')} keys={list(h.keys())}")
             for host in hosts:
                 name = host.get("hostname") or host.get("name") or host.get("hostName", "?")
                 cpu  = host.get("cpuUsage", -1)
