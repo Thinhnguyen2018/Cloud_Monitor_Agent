@@ -87,55 +87,20 @@ def parse_list(data):
         if isinstance(data.get(k), list): return data[k]
     return []
 
-_DANGEROUS_PORTS = {22: "SSH", 3389: "RDP", 23: "Telnet", 3306: "MySQL", 5432: "PostgreSQL"}
-
-def is_dangerous_rule(rule):
-    direction = (rule.get("direction") or "").lower()
-    if direction != "ingress": return None
-    remote = rule.get("remoteIpPrefix") or rule.get("remote_ip_prefix") or ""
-    if remote not in ("0.0.0.0/0", "::/0", ""): return None
-    proto = (rule.get("protocol") or "").lower()
-    port_min = rule.get("portRangeMin") if rule.get("portRangeMin") is not None else rule.get("port_range_min")
-    port_max = rule.get("portRangeMax") if rule.get("portRangeMax") is not None else rule.get("port_range_max")
-    if proto in ("any", "") or proto is None:
-        return "Tất cả port mở từ 0.0.0.0/0"
-    if port_min is not None and port_max is not None:
-        if int(port_min) <= 1 and int(port_max) >= 65534:
-            return "Tất cả port mở từ 0.0.0.0/0"
-        for port, svc in _DANGEROUS_PORTS.items():
-            if int(port_min) <= port <= int(port_max):
-                return f"Port {port} ({svc}) mở từ 0.0.0.0/0"
-    return None
-
 def run_secgroup_alerts():
+    from sg_risk_engine import run_sg_risk_detection
     customers = get_all_customers()
     for cust in customers:
         try:
-            token, info = fetch_token(cust["client_id"], cust["client_secret"])
-            uid = str(info.get("accountId") or info.get("userId", "0"))
-            P = cust["project_id"]
-            sv, sd = gn_api(token, uid, "GET", f"v2/{P}/secgroups")
-            secgroups = parse_list(sd) if sv == 200 else []
-            warnings = []
-            for sg in secgroups:
-                sg_name = sg.get("name", "?")
-                sg_id = sg.get("uuid") or sg.get("id", "")
-                if not sg_id: continue
-                sv2, rd = gn_api(token, uid, "GET", f"v2/{P}/secgroups/{sg_id}")
-                rules = (rd.get("secgroupRuleEntities") or rd.get("rules") or []) if sv2 == 200 else []
-                inline = sg.get("secGroupRuleInfoSet") or sg.get("secgroupRuleEntities") or []
-                for rule in (rules or inline):
-                    msg = is_dangerous_rule(rule)
-                    if msg:
-                        warnings.append(f"[{sg_name}] {msg}")
-            if warnings:
-                detail = "\n".join(warnings[:10])
-                db_write_notification(cust["name"], f"🔴 {len(warnings)} quy tắc Security Group không an toàn", detail, "danger")
-            else:
-                db_write_notification(cust["name"], f"[DEBUG] Secgroup OK - {len(secgroups)} SGs checked", f"No dangerous rules found", "warning")
+            run_sg_risk_detection(
+                customer=cust,
+                get_conn_fn=get_conn,
+                db_write_fn=db_write_notification,
+                database_url=DATABASE_URL,
+            )
         except Exception as e:
             print(f"[MONITOR] secgroup error for {cust['name']}: {e}")
-            db_write_notification(cust["name"], "[DEBUG] SECGROUP_ALERT error", str(e), "danger")
+            db_write_notification(cust["name"], "[SECGROUP] Lỗi quét Security Group", str(e), "danger")
 
 def run_health_alerts():
     customers = get_all_customers()
@@ -153,7 +118,7 @@ def run_health_alerts():
         except Exception as e:
             print(f"[MONITOR] health error for {cust['name']}: {e}")
 
-SECGROUP_INTERVAL = 60  # 1 minute (test)
+SECGROUP_INTERVAL = 15 * 60  # 15 minutes
 HEALTH_INTERVAL   = 30 * 60
 CPU_RAM_INTERVAL  = 5  * 60
 

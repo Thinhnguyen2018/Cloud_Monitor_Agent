@@ -1,0 +1,83 @@
+{
+  "version": "1.0",
+  "risk_scores": {
+    "CRITICAL": 100,
+    "HIGH": 70,
+    "MEDIUM": 40,
+    "LOW": 10
+  },
+  "policies": [
+    {
+      "id": "SG001",
+      "name": "Public SSH",
+      "severity": "CRITICAL",
+      "conditions": {
+        "direction": "ingress",
+        "cidr": ["0.0.0.0/0", "::/0"],
+        "port": [22]
+      },
+      "message": "SSH exposed publicly",
+      "recommendation": "Restrict access to VPN or office IP"
+    },
+    {
+      "id": "SG002",
+      "name": "Public RDP",
+      "severity": "HIGH",
+      "conditions": {
+        "direction": "ingress",
+        "cidr": ["0.0.0.0/0", "::/0"],
+        "port": [3389]
+      },
+      "message": "RDP exposed publicly",
+      "recommendation": "Restrict access"
+    },
+    {
+      "id": "SG003",
+      "name": "Public Database",
+      "severity": "CRITICAL",
+      "conditions": {
+        "direction": "ingress",
+        "cidr": ["0.0.0.0/0", "::/0"],
+        "port": [3306, 5432, 1433, 1521, 6379, 27017, 9200]
+      },
+      "message": "Database service exposed publicly",
+      "recommendation": "Allow only private network access"
+    },
+    {
+      "id": "SG004",
+      "name": "All Ports Open",
+      "severity": "CRITICAL",
+      "conditions": {
+        "direction": "ingress",
+        "cidr": ["0.0.0.0/0", "::/0"],
+        "protocol": ["all"]
+      },
+      "message": "All ports exposed publicly",
+      "recommendation": "Restrict exposed services"
+    },
+    {
+      "id": "SG005",
+      "name": "Kubernetes API Public",
+      "severity": "HIGH",
+      "conditions": {
+        "direction": "ingress",
+        "cidr": ["0.0.0.0/0", "::/0"],
+        "port": [6443]
+      },
+      "message": "Kubernetes API exposed publicly",
+      "recommendation": "Allow only trusted IP ranges"
+    },
+    {
+      "id": "SG006",
+      "name": "Docker Daemon Public",
+      "severity": "HIGH",
+      "conditions": {
+        "direction": "ingress",
+        "cidr": ["0.0.0.0/0", "::/0"],
+        "port": [2375, 2376]
+      },
+      "message": "Docker daemon exposed publicly",
+      "recommendation": "Close public access immediately"
+    }
+  ]
+}
