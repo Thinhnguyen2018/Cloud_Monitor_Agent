@@ -118,21 +118,11 @@ def run_health_alerts():
         except Exception as e:
             print(f"[MONITOR] health error for {cust['name']}: {e}")
 
-SECGROUP_INTERVAL = 15 * 60  # 15 minutes
+SECGROUP_INTERVAL = 1 * 60  # 1 minute
 HEALTH_INTERVAL   = 30 * 60
 CPU_RAM_INTERVAL  = 5  * 60
 
 def main():
-    print("[MONITOR] Ready")
-    # Write startup notification to confirm monitor.py is running and DB is accessible
-    try:
-        customers = get_all_customers()
-        for cust in customers:
-            db_write_notification(cust["name"], "[DEBUG] Monitor process started", f"customers={len(customers)}", "warning")
-        print(f"[MONITOR] Startup notification written, {len(customers)} customers found")
-    except Exception as e:
-        print(f"[MONITOR] Startup DB write failed: {e}")
-
     last = {"secgroup": 0, "health": 0, "cpu_ram": 0}
     while True:
         now = time.time()
