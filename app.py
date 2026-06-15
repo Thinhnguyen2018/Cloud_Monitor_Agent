@@ -328,7 +328,9 @@ def db_write_notification(customer, title, body, ntype="info"):
 def db_get_notifications(customer, unread_only=False):
     conn = get_conn(); cur = conn.cursor()
     q = f"SELECT * FROM notifications WHERE customer={_PH}"
-    if unread_only: q += " AND read=0"
+    if unread_only:
+        read_false = "false" if (USE_PG and DATABASE_URL) else "0"
+        q += f" AND read={read_false}"
     q += " ORDER BY created_at DESC LIMIT 50"
     cur.execute(q, (customer,))
     cols = [d[0] for d in cur.description]
