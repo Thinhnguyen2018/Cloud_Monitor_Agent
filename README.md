@@ -140,6 +140,26 @@ Image: [`nguyenngocgiathinh/greennode-agent`](https://hub.docker.com/r/nguyenngo
 
 ---
 
+## Project Structure
+
+| File / Folder | Role |
+|---------------|------|
+| `app.py` | Main Flask application — AI chat, VM/network/storage actions, API endpoints |
+| `monitor.py` | Background monitoring process — CPU/RAM alerts, health checks |
+| `sg_risk_engine.py` | Security Group risk detection engine — policy evaluation & alerts |
+| `sg_policies.json` | Security Group risk policies (SSH, RDP, DB, all-ports exposure rules) |
+| `start.sh` | Container entrypoint — starts gunicorn + monitor.py in parallel |
+| `Dockerfile.agentbase` | Production image for GreenNode AgentBase deployment |
+| `Dockerfile` | Local development image for self-hosted Docker/server deployment |
+| `docker-compose.yml` | Local development stack (app + environment) |
+| `gunicorn_config.py` | Gunicorn server configuration for local/server deployment |
+| `requirements.txt` | Python dependencies |
+| `static/` | Frontend — single-page dashboard (HTML/CSS/JS) |
+| `references/` | Static reference data — VM flavors, images, volume types |
+| `.github/workflows/` | CI/CD — GitHub Actions build & push to Docker Hub on every commit |
+
+---
+
 ## Deployment
 
 Deployed on **GreenNode AgentBase** — VNG Cloud's AI agent runtime platform.
