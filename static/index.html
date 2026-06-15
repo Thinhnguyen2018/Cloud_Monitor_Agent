@@ -278,6 +278,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
     <button id="alert-btn" title="Cảnh báo chưa xử lý">🚨<span id="alert-btn-badge"></span></button>
     <button id="notif-btn" title="Thông báo">🔔<span id="notif-badge"></span></button>
     <span id="conn-badge">⬤ chưa chọn</span>
+    <button id="logout-btn" title="Đăng xuất" style="background:none;border:1px solid #ddd;border-radius:8px;padding:5px 10px;font-size:12px;color:#666;cursor:pointer;flex-shrink:0" onclick="doLogout()">⏻ Đăng xuất</button>
   </div>
 
   <!-- Info / Guide panel -->
@@ -596,6 +597,12 @@ const chatMessages  = {};
 // ── Customers ─────────────────────────────────────────────────────────────────
 // Global fetch wrapper with token auth + 401 handler
 const ADMIN_TOKEN_KEY = 'gn_admin_token';
+
+async function doLogout() {
+  await fetch('/api/logout', {method:'POST', credentials:'include'}).catch(()=>{});
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  window.location.href = '/login';
+}
 
 async function apiFetch(url, options={}) {
   const token = localStorage.getItem(ADMIN_TOKEN_KEY) || '';
