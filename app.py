@@ -2972,6 +2972,17 @@ def execute_extended_action(token, uid, project_id, action_type, params):
         wan_ip_id    = params.get("wanIpId")
         fip_addr     = params.get("floatingIp", "")
         interface_id = params.get("networkInterfaceId", "")
+        # If missing networkInterfaceId or wanIpId, look them up from VM
+        if not interface_id or not wan_ip_id:
+            sv, sd = gn_api(token, uid, "GET", f"v2/{P}/servers/{server_id}")
+            vm_data = sd.get("data", sd) if isinstance(sd, dict) else {}
+            for iface in vm_data.get("internalInterfaces", []):
+                if iface.get("floatingIp"):
+                    if not fip_addr or iface.get("floatingIp") == fip_addr:
+                        interface_id = interface_id or iface.get("uuid", "")
+                        wan_ip_id    = wan_ip_id or iface.get("floatingIpId", "")
+                        fip_addr     = fip_addr or iface.get("floatingIp", "")
+                        break
         s, d = gn_api(token, uid, "PUT",
             f"v2/{P}/servers/{server_id}/wan-ips/{wan_ip_id}/detach",
             {"networkInterfaceId": interface_id, "tags": []})
