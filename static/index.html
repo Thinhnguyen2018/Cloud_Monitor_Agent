@@ -1276,6 +1276,7 @@ async function resolveAllAlertsAdmin() {
   });
   if (btn) { btn.textContent = '✓ Đã xong'; btn.classList.add('done'); }
   setTimeout(() => loadAlertsAdmin(), 800);
+  setTimeout(() => { if (btn) { btn.textContent = 'Đã xử lý tất cả'; btn.classList.remove('done'); btn.disabled = false; } }, 2000);
 }
 
 document.getElementById('alert-btn').addEventListener('click', () => {
