@@ -621,6 +621,7 @@ def run_sg_risk_detection(customer: dict, get_conn_fn, db_write_fn,
 
     active_keys = set()
     new_count   = 0
+    new_by_sg: dict = {}  # sg_name → list of new violations
 
     # Process SG policy violations
     for v in sg_violations:
@@ -639,13 +640,12 @@ def run_sg_risk_detection(customer: dict, get_conn_fn, db_write_fn,
         is_new, _ = alert_gen.upsert(alert)
         active_keys.add((v.sg.sg_id, v.policy_id))
         if is_new:
-            notifier.notify_violation(customer["name"], v)
+            new_by_sg.setdefault(v.sg.name, []).append(v)
             new_count += 1
 
     # Process network scan violations
     for nv in net_violations:
-        # Use vm_id + "NET-" + policy_id as dedup key via sg_id field
-        net_sg_id = f"net-{nv.vm_id}"
+        net_sg_id     = f"net-{nv.vm_id}"
         net_policy_id = f"NET-{nv.policy_id}-{nv.port}"
         alert = SGAlert(
             customer=customer["name"],
@@ -662,20 +662,35 @@ def run_sg_risk_detection(customer: dict, get_conn_fn, db_write_fn,
         is_new, _ = alert_gen.upsert(alert)
         active_keys.add((net_sg_id, net_policy_id))
         if is_new:
-            title = f"🔴 [{nv.policy_id}] {nv.policy_name} — {nv.vm_name}"
-            body  = (
-                f"Severity: {nv.severity}  |  Risk Score: {nv.risk_score}/100\n"
-                f"{nv.message}\n"
-                f"Port {nv.port}/tcp mở từ internet (xác nhận bằng network probe)\n"
-                f"Recommendation: {nv.recommendation}"
-            )
-            ntype = "danger" if nv.severity in ("CRITICAL", "HIGH") else "warning"
-            db_write_fn(customer["name"], title, body, ntype)
+            label = f"{nv.sg_name} → {nv.vm_name}"
+            new_by_sg.setdefault(label, []).append(nv)
             new_count += 1
+
+    # Send one grouped notification per dangerous SG
+    for sg_name, viols in new_by_sg.items():
+        severities  = [v.severity if hasattr(v, "severity") else v.severity for v in viols]
+        worst       = "CRITICAL" if "CRITICAL" in severities else "HIGH" if "HIGH" in severities else "MEDIUM"
+        risk_scores = [v.risk_score for v in viols]
+        max_score   = max(risk_scores)
+        issues      = ", ".join(
+            v.policy_name if hasattr(v, "policy_name") else v.policy_name
+            for v in viols
+        )
+        title = f"🔴 Security Group nguy hiểm: {sg_name}"
+        body  = (
+            f"Phát hiện {len(viols)} quy tắc không an toàn:\n"
+            + "\n".join(
+                f"  • [{v.severity}] {v.policy_name}: {v.message}"
+                for v in viols
+            )
+            + f"\n\nRisk Score: {max_score}/100"
+            + f"\nKhuyến nghị: Kiểm tra và giới hạn quyền truy cập ngay."
+        )
+        ntype = "danger" if worst in ("CRITICAL", "HIGH") else "warning"
+        db_write_fn(customer["name"], title, body, ntype)
 
     resolved = alert_gen.resolve_stale(customer["name"], active_keys)
     notifier.notify_resolved(customer["name"], resolved)
-    notifier.notify_scan_summary(customer["name"], new_count, combined_summary)
 
     print(
         f"[SG_RISK] {customer['name']}: "
