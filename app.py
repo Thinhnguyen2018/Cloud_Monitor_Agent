@@ -883,7 +883,7 @@ def detect_action_intent(message, vms, sgs, volumes=[], wan_ips=[]):
         return ("vm_create_guide", {"vmName": vm_name or ""}, "Hướng dẫn tạo VM mới")
 
     # ── List/cancel schedule ─────────────────────────────────────────────────
-    if any(w in msg for w in ["xem lịch", "danh sách lịch", "lịch hẹn", "lịch đã đặt", "đang hẹn"]):
+    if any(w in msg for w in ["xem lịch", "danh sách lịch", "lịch đã đặt", "đang hẹn", "xem lịch hẹn", "danh sách lịch hẹn"]) and not any(w in msg for w in ["đặt lịch", "tạo lịch", "hẹn lúc", "vào lúc", "lúc "]):
         return ("list_schedule", {}, "Danh sách lịch hẹn hiện tại")
 
     if any(w in msg for w in ["hủy lịch", "xóa lịch", "bỏ lịch", "cancel schedule"]):
