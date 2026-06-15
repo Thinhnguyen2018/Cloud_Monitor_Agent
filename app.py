@@ -1844,8 +1844,14 @@ def chat():
         svt, dvt = gn_api(token, uid, "GET", f"v2/{P}/volume-types")
         vol_types = _parse_api(svt, dvt)
 
-        # SG from VMs
+        # SG: fetch all from API, then annotate with attached VMs
+        ssg, dsg = gn_api(token, uid, "GET", f"v2/{P}/secgroups")
         sg_map = {}
+        if ssg == 200:
+            for sg in _parse_api(ssg, dsg):
+                k = sg.get("uuid", sg.get("id", ""))
+                if k:
+                    sg_map[k] = {**sg, "servers": []}
         for s in vms:
             for sg in s.get("secGroups", []):
                 k = sg.get("uuid", sg.get("id", ""))
