@@ -1087,6 +1087,7 @@ document.getElementById('notif-mark-read').addEventListener('click', async funct
     body: JSON.stringify({customer: currentCustomer.name})});
   btn.textContent = '✓ Đã đọc';
   setTimeout(() => { btn.textContent = 'Đánh dấu đã đọc'; btn.disabled = false; }, 1500);
+  _notifLoading = false;
   loadNotifications();
 });
 document.addEventListener('click', (e) => {
