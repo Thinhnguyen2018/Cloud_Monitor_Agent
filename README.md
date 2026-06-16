@@ -43,7 +43,7 @@ An AI-powered cloud infrastructure management agent for VNG Cloud, built for **C
 ### Automated Monitoring
 | Job | Interval | Description |
 |-----|----------|-------------|
-| Security Group Audit | Every 1 min | Detect overly permissive firewall rules (public SSH, RDP, DB ports) |
+| Security Group Audit | Every 15 min | Detect overly permissive firewall rules (public SSH, RDP, DB ports) |
 | CPU/RAM Alerts | Every 5 min | Alert when CPU exceeds 80% threshold via vMonitor API |
 | Health Check | Every 30 min | Detect SHUTOFF or ERROR VMs |
 
