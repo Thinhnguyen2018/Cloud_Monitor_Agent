@@ -63,7 +63,7 @@ AgentBase Runtime (Docker)
     │   ├── APScheduler — scheduled VM actions (stop/start/reboot at set time)
     │   └── SQLite / PostgreSQL — customers, notifications, audit log, token cache
     └── monitor.py (background process)
-        ├── Security Group risk scanner — every 1 min
+        ├── Security Group risk scanner — every 15 min
         ├── CPU/RAM threshold alerts via vMonitor API — every 5 min
         └── VM health checker — every 30 min
 ```
