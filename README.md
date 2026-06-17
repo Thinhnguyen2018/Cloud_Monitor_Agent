@@ -77,6 +77,8 @@ AgentBase Runtime (Docker)
 ```
 https://endpoint-436b8f56-bd9f-4ee9-b0d0-809804360eec.agentbase-runtime.aiplatform.vngcloud.vn/
 ```
+Username: admin
+Password: admin12345
 
 Hosted on **GreenNode AgentBase Runtime** — VNG Cloud's AI agent platform.
 
