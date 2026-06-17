@@ -72,6 +72,32 @@ AgentBase Runtime (Docker)
 
 ---
 
+## Live Endpoint
+
+```
+https://endpoint-436b8f56-bd9f-4ee9-b0d0-809804360eec.agentbase-runtime.aiplatform.vngcloud.vn/
+```
+
+Hosted on **GreenNode AgentBase Runtime** — VNG Cloud's AI agent platform.
+
+---
+
+## AI Models & Tools
+
+| Component | Technology |
+|-----------|-----------|
+| **LLM / Intent Detection** | GreenNode MaaS — `google/gemma-4-31b-it` |
+| **Agent Runtime** | GreenNode AgentBase (Docker, auto-scaling) |
+| **Cloud API** | VNG Cloud vServer API v2 (VM, volume, network, SG) |
+| **Monitoring API** | VNG Cloud vMonitor API (CPU/RAM metrics) |
+| **Auth** | VNG Cloud IAM — OAuth2 client credentials |
+| **Database** | PostgreSQL (Render) / SQLite (local) |
+| **Scheduler** | APScheduler (in-process) |
+| **Backend** | Python 3.11 · Flask · Gunicorn |
+| **CI/CD** | GitHub Actions → Docker Hub |
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Description |
